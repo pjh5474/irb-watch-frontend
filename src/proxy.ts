@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import createIntlMiddleware from "next-intl/middleware";
 import { NextResponse, type NextRequest } from "next/server";
 import { routing } from "@/i18n/routing";
+import { isPublicPage } from "@/lib/public-pages";
 
 const handleIntl = createIntlMiddleware(routing);
 
@@ -30,9 +31,10 @@ export async function proxy(request: NextRequest) {
   const segments = request.nextUrl.pathname.split("/").filter(Boolean);
   const hasLocale = (routing.locales as readonly string[]).includes(segments[0]);
   const locale = hasLocale ? segments[0] : routing.defaultLocale;
-  const onLogin = (hasLocale ? segments[1] : segments[0]) === "login";
+  const page = hasLocale ? segments[1] : segments[0];
+  const onLogin = page === "login";
 
-  if (!signedIn && !onLogin) {
+  if (!signedIn && !isPublicPage(page)) {
     return NextResponse.redirect(new URL(`/${locale}/login`, request.url));
   }
   if (signedIn && onLogin) {

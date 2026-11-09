@@ -19,6 +19,7 @@
     "feed": "Overview",
     "sources": "Sources",
     "admin": "Admin",
+    "settings": "Settings",
     "signOut": "Sign out",
     "language": "한국어"
   },
@@ -189,6 +190,28 @@
       "failed": "last scan failed",
       "stale": "no good scan for over 36 hours"
     }
+  },
+  "settings": {
+    "title": "Settings",
+    "mailTitle": "Email",
+    "digestLabel": "Email me a daily digest",
+    "digestHint": "One email each morning with the new and updated documents of the sources you can read. Nothing is sent on days without changes.",
+    "studiesNote": "Documents of members-only studies are shown as a count only, never with titles.",
+    "digestOn": "The daily digest is on.",
+    "digestOff": "The daily digest is off. You will not get these emails.",
+    "saveError": "Could not save the change. Try again in a moment.",
+    "loadError": "Could not load your settings."
+  },
+  "unsubscribe": {
+    "title": "Daily digest",
+    "question": "Stop the daily digest email? You can turn it on again at any time in Settings.",
+    "button": "Stop the emails",
+    "working": "Stopping...",
+    "done": "Done. You will not get the daily digest any more.",
+    "settingsLink": "Open Settings",
+    "invalid": "This link is not valid. Sign in and use Settings to turn the digest off.",
+    "error": "Could not reach the server. Try again in a moment.",
+    "tryAgain": "Try again"
   },
   "dashboard": {
     "title": "Key numbers",

@@ -256,6 +256,50 @@ export type Database = {
           },
         ]
       }
+      mail_claims: {
+        Row: {
+          created_at: string
+          key: string
+        }
+        Insert: {
+          created_at?: string
+          key: string
+        }
+        Update: {
+          created_at?: string
+          key?: string
+        }
+        Relationships: []
+      }
+      notification_prefs: {
+        Row: {
+          digest_enabled: boolean
+          last_digest_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          digest_enabled?: boolean
+          last_digest_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          digest_enabled?: boolean
+          last_digest_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_prefs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -311,6 +355,35 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      source_alert_state: {
+        Row: {
+          notified_at: string
+          notified_level: string
+          notified_reason: string | null
+          source_id: number
+        }
+        Insert: {
+          notified_at?: string
+          notified_level: string
+          notified_reason?: string | null
+          source_id: number
+        }
+        Update: {
+          notified_at?: string
+          notified_level?: string
+          notified_reason?: string | null
+          source_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_alert_state_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: true
+            referencedRelation: "sources"
             referencedColumns: ["id"]
           },
         ]

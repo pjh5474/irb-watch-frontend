@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
 import { RECENT_DAYS, recentCutoff, wantsOnlyNew } from "@/lib/recent";
+import { dataMayBeOld, sourceHealth } from "@/lib/source-health";
 import { createClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 50;
@@ -31,7 +32,7 @@ export default async function SourcePage({
 
   const { data: source, error: sourceError } = await supabase
     .from("sources")
-    .select("id, name, requires_login, is_active, last_scan_at")
+    .select("id, name, requires_login, is_active, last_scan_at, last_scan_status")
     .eq("id", sourceId)
     .maybeSingle();
   if (sourceError) {
@@ -74,6 +75,11 @@ export default async function SourcePage({
           {onlyNew ? t("showAllDocuments") : t("showOnlyNew", { days: RECENT_DAYS })}
         </Link>
       </div>
+      {dataMayBeOld(sourceHealth(source).level) && (
+        <p className="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+          {t("mayBeOldLong")}
+        </p>
+      )}
       <div className="flex flex-wrap gap-3 text-sm opacity-70">
         {!source.is_active && <span>{t("inactive")}</span>}
         <span>

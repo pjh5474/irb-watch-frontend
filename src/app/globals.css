@@ -178,6 +178,11 @@ a {
 a:hover {
   opacity: 0.8;
 }
+/* Internal links show their underline on hover only; keyboard users get it on focus too. */
+a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .reveal,
@@ -192,6 +197,28 @@ a:hover {
   }
   .reveal:hover {
     transform: none;
+  }
+}
+
+/* Status dots (components/status-dot.tsx): a soft ring spreads from the dot and fades out.
+   The speed comes from --ring-speed: slow for "fine", fast for "look at this". */
+@keyframes irb-ring {
+  from {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.dot-ring {
+  animation: irb-ring var(--ring-speed, 2.6s) ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot-ring {
+    animation: none;
+    opacity: 0;
   }
 }
 

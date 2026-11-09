@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { adminErrorText } from "@/components/admin/error-text";
+import { HealthLight, sourcesNeedingAttention } from "@/components/admin/health-light";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
@@ -38,6 +39,7 @@ export function AdminSources() {
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
+  const needAttention = query.data ? sourcesNeedingAttention(query.data) : 0;
 
   async function scanOne(source: AdminSource) {
     setMessage(null);
@@ -110,6 +112,14 @@ export function AdminSources() {
         </p>
       )}
       {query.data?.length === 0 && <p className="mt-6 text-sm opacity-70">{t("noSources")}</p>}
+      {query.data && needAttention > 0 && (
+        <p
+          role="alert"
+          className="mt-6 rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          {t("attentionBanner", { n: needAttention })}
+        </p>
+      )}
 
       <ul className="mt-6 flex flex-col gap-3">
         {query.data?.map((source, index) => (
@@ -119,6 +129,7 @@ export function AdminSources() {
             style={{ "--i": index } as React.CSSProperties}
           >
             <div className="flex flex-wrap items-center gap-2">
+              <HealthLight source={source} />
               <Link href={`/admin/sources/${source.id}`} className="font-medium underline-offset-4 hover:underline">
                 {source.name}
               </Link>

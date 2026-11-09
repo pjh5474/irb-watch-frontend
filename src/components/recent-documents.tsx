@@ -1,14 +1,28 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { recentCutoff, RECENT_DAYS } from "@/lib/recent";
+import { dataMayBeOld, sourceHealth } from "@/lib/source-health";
 import { createClient } from "@/lib/supabase/server";
 
-type SourceRef = { id: number; name: string };
+type SourceRef = {
+  id: number;
+  name: string;
+  is_active: boolean;
+  last_scan_at: string | null;
+  last_scan_status: string | null;
+};
 
 // Per readable source: how many documents were first seen in the last RECENT_DAYS days and
 // the titles of the three newest. Row-level security decides which sources and documents the
 // user can see, so a study the user is not assigned to never shows up here.
-export async function RecentDocuments({ sources }: { sources: SourceRef[] }) {
+export async function RecentDocuments({
+  sources,
+  sourcesFailed = false,
+}: {
+  sources: SourceRef[];
+  // The list of sources itself could not be read: an empty list must not read as "nothing new".
+  sourcesFailed?: boolean;
+}) {
   const t = await getTranslations("recent");
   const supabase = await createClient();
   const cutoff = recentCutoff();
@@ -40,7 +54,7 @@ export async function RecentDocuments({ sources }: { sources: SourceRef[] }) {
   );
 
   // A failed lookup is shown as a failure, never as "nothing new".
-  const failed = rows.some((r) => r.failed);
+  const failed = sourcesFailed || rows.some((r) => r.failed);
   const withNew = rows.filter((r) => r.count > 0);
 
   return (
@@ -71,6 +85,11 @@ export async function RecentDocuments({ sources }: { sources: SourceRef[] }) {
               <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-800 dark:bg-green-900/40 dark:text-green-100">
                 {t("count", { n: count })}
               </span>
+              {dataMayBeOld(sourceHealth(source).level) && (
+                <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
+                  {t("mayBeOld")}
+                </span>
+              )}
             </div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
               {latest.map((doc) => (

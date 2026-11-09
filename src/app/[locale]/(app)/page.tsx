@@ -31,7 +31,7 @@ export default async function FeedPage({
   // Explicit safe columns: RLS cannot hide sources.config / last_scan_error from users.
   const { data: sources, error: sourcesError } = await supabase
     .from("sources")
-    .select("id, name, is_active, last_scan_at")
+    .select("id, name, is_active, last_scan_at, last_scan_status")
     .order("id");
   const names = new Map((sources ?? []).map((s) => [s.id, s.name]));
   const sourceId = source && /^\d+$/.test(source) ? Number(source) : null;
@@ -70,6 +70,7 @@ export default async function FeedPage({
       <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:items-start">
         <RecentDocuments
           sources={(sources ?? []).filter((s) => sourceId === null || s.id === sourceId)}
+          sourcesFailed={Boolean(sourcesError)}
         />
 
         <section aria-labelledby="changes-title">

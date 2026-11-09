@@ -1,6 +1,7 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
+import { dataMayBeOld, sourceHealth } from "@/lib/source-health";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function SourcesPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -13,7 +14,7 @@ export default async function SourcesPage({ params }: { params: Promise<{ locale
   // Explicit safe columns: RLS cannot hide sources.config / last_scan_error from users.
   const { data: sources, error } = await supabase
     .from("sources")
-    .select("id, name, requires_login, is_active, last_scan_at")
+    .select("id, name, requires_login, is_active, last_scan_at, last_scan_status")
     .order("id");
   const access = await getAccessState(supabase);
   if (!access) {
@@ -77,6 +78,11 @@ export default async function SourcesPage({ params }: { params: Promise<{ locale
                 )}
                 {!source.is_active && (
                   <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-700">{t("inactive")}</span>
+                )}
+                {dataMayBeOld(sourceHealth(source).level) && (
+                  <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
+                    {t("mayBeOld")}
+                  </span>
                 )}
                 <span className="ml-auto opacity-70">
                   {source.last_scan_at

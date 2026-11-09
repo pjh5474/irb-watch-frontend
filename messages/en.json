@@ -76,6 +76,8 @@
     "documentsLoadError": "Could not load documents.",
     "noDocuments": "No documents stored yet.",
     "noNewDocuments": "No new documents in the last {days} days.",
+    "mayBeOld": "Data may be out of date",
+    "mayBeOldLong": "The last scan of this source did not complete normally, so the documents below may be out of date. They are as of the last good scan.",
     "viewingNew": "New in the last {days} days",
     "viewingAll": "All documents",
     "showOnlyNew": "Show only new ({days} days)",
@@ -169,7 +171,22 @@
     "memberAdded": "User added.",
     "memberRemoved": "User removed.",
     "removeMember": "Remove",
-    "confirmRemove": "Remove this user?"
+    "confirmRemove": "Remove this user?",
+    "attentionBanner": "{n} source(s) need attention: scans failed, are out of date, or need a person to act.",
+    "health": {
+      "ok": "Healthy",
+      "scanning": "Scanning",
+      "attention": "Needs attention",
+      "problem": "Problem",
+      "idle": "Not scanned yet",
+      "inactive": "Not watched"
+    },
+    "healthReason": {
+      "paused": "scans paused after a rejected login",
+      "needsReview": "needs review (login or page layout)",
+      "failed": "last scan failed",
+      "stale": "no good scan for over 36 hours"
+    }
   },
   "dashboard": {
     "title": "Key numbers",

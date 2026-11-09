@@ -31,9 +31,21 @@ describe("admin messages", () => {
     if (!text.includes('useTranslations("admin")') && !text.includes('getTranslations("admin")')) continue;
     for (const m of text.matchAll(/\bt\("([A-Za-z0-9_.]+)"/g)) keys.add(m[1]);
   }
-  // error-text.ts receives t as a parameter, so its keys are listed here.
+  // error-text.ts receives t as a parameter, and the health light builds its keys from the
+  // level and reason, so those keys are listed here.
   keys.add("errors.unreachable");
   keys.add("errors.generic");
+  for (const level of ["ok", "scanning", "attention", "problem", "idle", "inactive"]) {
+    keys.add(`health.${level}`);
+  }
+  for (const reason of ["paused", "needsReview", "failed", "stale"]) keys.add(`healthReason.${reason}`);
+
+  it("the plain 'data may be out of date' warning for users exists in both languages", () => {
+    for (const key of ["mayBeOld", "mayBeOldLong"]) {
+      expect(has(en.sources, key), `en.sources.${key}`).toBe(true);
+      expect(has(ko.sources, key), `ko.sources.${key}`).toBe(true);
+    }
+  });
 
   it("finds the keys the screens use", () => {
     expect(keys.size).toBeGreaterThan(40);

@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Badge, SOURCES_KEY } from "@/components/admin/admin-sources";
 import { adminErrorText } from "@/components/admin/error-text";
+import { HealthLight } from "@/components/admin/health-light";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
@@ -93,6 +94,7 @@ function Settings({ source }: { source: AdminSource }) {
         {source.requires_login ? <Badge tone="warn">{t("membersOnly")}</Badge> : <Badge>{t("public")}</Badge>}
         {!source.is_active && <Badge>{t("inactive")}</Badge>}
       </div>
+      <HealthLight source={source} />
       <p className="break-all text-xs opacity-70">{source.url}</p>
       <p className="text-xs opacity-70">
         {source.last_scan_at

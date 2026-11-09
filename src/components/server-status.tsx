@@ -2,14 +2,16 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { StatusDot, type DotPulse, type DotTone } from "@/components/status-dot";
 import { API_REACHABLE, API_UNREACHABLE } from "@/lib/api/status";
 
 type State = "checking" | "online" | "offline";
 
-const DOT: Record<State, string> = {
-  checking: "bg-neutral-400 animate-pulse motion-reduce:animate-none",
-  online: "bg-green-500",
-  offline: "bg-red-500",
+// Online: a calm slow ring. Checking: gray and quick. Offline: a red ring that draws the eye.
+const DOT: Record<State, { tone: DotTone; pulse: DotPulse }> = {
+  checking: { tone: "gray", pulse: "fast" },
+  online: { tone: "green", pulse: "slow" },
+  offline: { tone: "red", pulse: "fast" },
 };
 
 // Small dot in the header: is the API server answering? Checked once when the page loads,
@@ -59,7 +61,7 @@ export function ServerStatus() {
       aria-live="polite"
       className="flex items-center gap-2 text-xs"
     >
-      <span aria-hidden className={`size-2.5 rounded-full transition-colors duration-300 ${DOT[state]}`} />
+      <StatusDot tone={DOT[state].tone} pulse={DOT[state].pulse} />
       <span className="hidden sm:inline">{t(state)}</span>
       <span className="sr-only sm:hidden">{t(state)}</span>
     </button>

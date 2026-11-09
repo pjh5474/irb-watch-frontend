@@ -65,6 +65,50 @@ describe("CountUp", () => {
     expect(visible(container)).toBe("100");
   });
 
+  it("never stays on an old number when the value changes", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    const view = render(
+      <NextIntlClientProvider locale="en" messages={{}}>
+        <p>
+          <CountUp value={5} />
+        </p>
+      </NextIntlClientProvider>,
+    );
+    runFrames([1000, 2000]); // finished at 5
+    expect(visible(view.container)).toBe("5");
+
+    // The value drops to 0: no animation runs for 0, and the old 5 must not stay on screen.
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={{}}>
+        <p>
+          <CountUp value={0} />
+        </p>
+      </NextIntlClientProvider>,
+    );
+    expect(visible(view.container)).toBe("0");
+    expect(spoken(view.container)).toBe("0");
+  });
+
+  it("with reduced motion a new value shows at once", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    const view = render(
+      <NextIntlClientProvider locale="en" messages={{}}>
+        <p>
+          <CountUp value={5} />
+        </p>
+      </NextIntlClientProvider>,
+    );
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={{}}>
+        <p>
+          <CountUp value={9} />
+        </p>
+      </NextIntlClientProvider>,
+    );
+    expect(visible(view.container)).toBe("9");
+    expect(frames).toHaveLength(0);
+  });
+
   it("does not animate zero", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: false }));
     const { container } = show(0);

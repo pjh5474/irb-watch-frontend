@@ -51,11 +51,12 @@ export async function Dashboard({ sources }: { sources: SourceRef[] | null }) {
     r.error || r.count === null ? "—" : <CountUp value={r.count} />;
 
   const watched = sources === null ? null : sources.filter((s) => s.is_active).length;
-  const lastScan = (sources ?? [])
-    .map((s) => s.last_scan_at)
-    .filter((d): d is string => d !== null)
-    .sort()
-    .at(-1);
+  // The newest scan among the sources that are still watched (compared as dates, not text).
+  const scanTimes = (sources ?? [])
+    .filter((s) => s.is_active && s.last_scan_at !== null)
+    .map((s) => Date.parse(s.last_scan_at as string))
+    .filter((ms) => !Number.isNaN(ms));
+  const lastScan = scanTimes.length > 0 ? new Date(Math.max(...scanTimes)).toISOString() : undefined;
 
   return (
     <section aria-label={t("title")} className="mt-6">

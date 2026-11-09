@@ -69,6 +69,13 @@
       "generic": "Summary failed."
     }
   },
+  "pagination": {
+    "paging": "Pages",
+    "previous": "Previous",
+    "next": "Next",
+    "goTo": "Go to page {n}",
+    "pageOf": "Page {page} of {total}"
+  },
   "sources": {
     "title": "Sources",
     "back": "Sources",
@@ -93,11 +100,7 @@
     "removed": "Removed",
     "needsReview": "Needs review",
     "posted": "Posted {date}",
-    "changed": "Changed {date}",
-    "paging": "Pages",
-    "previous": "Previous",
-    "next": "Next",
-    "pageOf": "{page} / {total}"
+    "changed": "Changed {date}"
   },
   "admin": {
     "loadError": "Could not load the admin screens.",

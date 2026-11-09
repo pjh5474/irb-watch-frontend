@@ -1,11 +1,14 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
+import { Pagination } from "@/components/pagination";
 import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
+import { parsePage } from "@/lib/paging";
 import { RECENT_DAYS, recentCutoff, wantsOnlyNew } from "@/lib/recent";
 import { dataMayBeOld, sourceHealth } from "@/lib/source-health";
 import { createClient } from "@/lib/supabase/server";
 
+// One source's documents stay 50 per page (the owner asked for 10 on the other lists).
 const PAGE_SIZE = 50;
 
 export default async function SourcePage({
@@ -20,11 +23,8 @@ export default async function SourcePage({
   setRequestLocale(locale);
   if (!/^\d+$/.test(id)) notFound();
   const sourceId = Number(id);
-  const page = pageParam && /^[1-9]\d*$/.test(pageParam) ? Number(pageParam) : 1;
+  const page = parsePage(pageParam);
   const onlyNew = wantsOnlyNew(newParam);
-  // Address of this list, keeping the "new only" choice when paging.
-  const listHref = (p: number) =>
-    `/sources/${sourceId}?${onlyNew ? "new=1&" : ""}page=${p}`;
 
   const t = await getTranslations("sources");
   const format = await getFormatter();
@@ -182,24 +182,13 @@ export default async function SourcePage({
         })}
       </ul>
 
-      {!error && pages > 1 && (
-        <nav aria-label={t("paging")} className="flex items-center justify-between text-sm">
-          {page > 1 ? (
-            <Link href={listHref(page - 1)} className="underline-offset-4 hover:underline">
-              ← {t("previous")}
-            </Link>
-          ) : (
-            <span />
-          )}
-          <span className="opacity-70">{t("pageOf", { page, total: pages })}</span>
-          {page < pages ? (
-            <Link href={listHref(page + 1)} className="underline-offset-4 hover:underline">
-              {t("next")} →
-            </Link>
-          ) : (
-            <span />
-          )}
-        </nav>
+      {!error && (
+        <Pagination
+          page={page}
+          pages={pages}
+          pathname={`/sources/${sourceId}`}
+          query={{ new: onlyNew ? "1" : undefined }}
+        />
       )}
     </main>
   );

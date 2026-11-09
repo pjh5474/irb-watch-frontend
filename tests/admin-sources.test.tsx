@@ -140,6 +140,43 @@ describe("stored login sign", () => {
   });
 });
 
+describe("paging of the source list", () => {
+  const many = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ ...PUBLIC, id: i + 1, name: `Board ${i + 1}`, url: `https://hrpp.snuh.org/hrpp/bbs/list.do?key=${1000 + i}` }));
+
+  it("shows 10 sources a page and moves to the next with the pager", async () => {
+    api.sources = many(23);
+    show();
+    await screen.findByText("Board 1");
+    expect(screen.queryByText("Board 11")).toBeNull();
+    expect(screen.getAllByRole("link", { name: /Board \d+/ })).toHaveLength(10);
+
+    fireEvent.click(screen.getByRole("button", { name: /Next/ }));
+    expect(await screen.findByText("Board 11")).toBeTruthy();
+    expect(screen.queryByText("Board 1")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 3" }));
+    expect(await screen.findByText("Board 23")).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: /Board \d+/ })).toHaveLength(3);
+  });
+
+  it("has no pager for 10 sources or fewer", async () => {
+    api.sources = many(10);
+    show();
+    await screen.findByText("Board 10");
+    expect(screen.queryByRole("navigation", { name: "Pages" })).toBeNull();
+  });
+
+  it("the attention banner still counts sources on other pages", async () => {
+    const broken = { ...PUBLIC, id: 99, name: "Broken board", last_scan_status: "failed", last_scan_error: "x", last_scan_at: "2026-11-09T00:00:00+00:00" };
+    api.sources = [...many(12), broken];
+    show();
+    await screen.findByText("Board 1");
+    expect(screen.queryByText("Broken board")).toBeNull(); // on page 2
+    expect(await screen.findByText(/1 source\(s\) need attention/)).toBeTruthy();
+  });
+});
+
 describe("weekly report preview button", () => {
   it("sends one preview and says it went to the admin's own address only", async () => {
     show();

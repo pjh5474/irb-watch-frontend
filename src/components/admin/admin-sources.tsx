@@ -7,10 +7,12 @@ import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
 import { HealthLight, sourcesNeedingAttention } from "@/components/admin/health-light";
 import { LoginBadge, loginStateOf, useStoredLogins } from "@/components/admin/login-badge";
+import { Pagination } from "@/components/pagination";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
 import { adminApi, type AdminSource } from "@/lib/api/admin";
+import { clampPage, pageCount, pageRange } from "@/lib/paging";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 export const SOURCES_KEY = ["admin", "sources"] as const;
@@ -36,6 +38,15 @@ export function AdminSources() {
   });
 
   const logins = useStoredLogins(query.data);
+
+  // 10 sources per page. The page is clamped, so deleting or hiding sources never leaves an empty
+  // page; the banner and the scan-all button still cover every source.
+  const [page, setPage] = useState(1);
+  const all = query.data ?? [];
+  const pages = pageCount(all.length);
+  const currentPage = clampPage(page, pages);
+  const [from, to] = pageRange(currentPage);
+  const visible = all.slice(from, to + 1);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
   const needAttention = query.data ? sourcesNeedingAttention(query.data) : 0;
@@ -159,7 +170,7 @@ export function AdminSources() {
       )}
 
       <ul className="mt-6 flex flex-col gap-3">
-        {query.data?.map((source, index) => (
+        {visible.map((source, index) => (
           <li
             key={source.id}
             className="reveal rounded border p-4"
@@ -209,6 +220,8 @@ export function AdminSources() {
           </li>
         ))}
       </ul>
+
+      <Pagination page={currentPage} pages={pages} onPage={setPage} />
 
       <form onSubmit={addSource} className="mt-8 flex flex-col gap-3 rounded border p-4">
         <h2 className="font-medium">{t("addTitle")}</h2>

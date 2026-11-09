@@ -69,6 +69,13 @@
       "generic": "요약에 실패했습니다."
     }
   },
+  "pagination": {
+    "paging": "페이지",
+    "previous": "이전",
+    "next": "다음",
+    "goTo": "{n}페이지로 이동",
+    "pageOf": "{total}페이지 중 {page}페이지"
+  },
   "sources": {
     "title": "출처",
     "back": "출처",
@@ -93,11 +100,7 @@
     "removed": "삭제됨",
     "needsReview": "확인 필요",
     "posted": "게시일 {date}",
-    "changed": "변경 {date}",
-    "paging": "페이지",
-    "previous": "이전",
-    "next": "다음",
-    "pageOf": "{page} / {total}"
+    "changed": "변경 {date}"
   },
   "admin": {
     "loadError": "관리자 화면을 불러오지 못했습니다.",

@@ -1,12 +1,12 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 import { Dashboard } from "@/components/dashboard";
 import { MarkdownText } from "@/components/markdown-text";
+import { Pagination } from "@/components/pagination";
 import { RecentDocuments } from "@/components/recent-documents";
 import { SourceFilter } from "@/components/source-filter";
 import { Link } from "@/i18n/navigation";
+import { clampPage, pageCount, pageRange, parsePage } from "@/lib/paging";
 import { createClient } from "@/lib/supabase/server";
-
-const PAGE_SIZE = 50;
 
 const PRIORITY_STYLE: Record<string, string> = {
   high: "bg-red-100 text-red-800",
@@ -19,10 +19,10 @@ export default async function FeedPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ source?: string }>;
+  searchParams: Promise<{ source?: string; cp?: string; rp?: string }>;
 }) {
   const { locale } = await params;
-  const { source } = await searchParams;
+  const { source, cp, rp } = await searchParams;
   setRequestLocale(locale);
   const t = await getTranslations("feed");
   const format = await getFormatter();
@@ -36,14 +36,27 @@ export default async function FeedPage({
   const names = new Map((sources ?? []).map((s) => [s.id, s.name]));
   const sourceId = source && /^\d+$/.test(source) ? Number(source) : null;
 
+  // The changes are paged by their own parameter (cp); the recent documents next to them have
+  // theirs (rp). A page past the end shows the last page instead of an error.
+  let countQuery = supabase
+    .from("audit_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("category", "document");
+  if (sourceId !== null) countQuery = countQuery.eq("source_id", sourceId);
+  const { count: changeTotal, error: countError } = await countQuery;
+  const changePages = pageCount(changeTotal ?? 0);
+  const changePage = clampPage(parsePage(cp), changePages);
+  const [from, to] = pageRange(changePage);
+
   let query = supabase
     .from("audit_logs")
     .select("id, created_at, event_type, source_id, document_id, title, summary, priority, payload")
     .eq("category", "document")
     .order("created_at", { ascending: false })
-    .limit(PAGE_SIZE);
+    .range(from, to);
   if (sourceId !== null) query = query.eq("source_id", sourceId);
-  const { data: cards, error } = await query;
+  const { data: cards, error: listError } = await query;
+  const error = countError ?? listError;
 
   // The audit log outlives the documents it describes (and RLS hides what a user may not
   // read), so link a card only when its document can really be opened.
@@ -71,6 +84,8 @@ export default async function FeedPage({
         <RecentDocuments
           sources={(sources ?? []).filter((s) => sourceId === null || s.id === sourceId)}
           sourcesFailed={Boolean(sourcesError)}
+          page={parsePage(rp)}
+          keep={{ source: sourceId === null ? undefined : String(sourceId), cp: changePage > 1 ? String(changePage) : undefined }}
         />
 
         <section aria-labelledby="changes-title">
@@ -139,6 +154,19 @@ export default async function FeedPage({
               );
             })}
           </ul>
+
+          {!error && (
+            <Pagination
+              page={changePage}
+              pages={changePages}
+              pathname="/"
+              param="cp"
+              query={{
+                source: sourceId === null ? undefined : String(sourceId),
+                rp: parsePage(rp) > 1 ? String(parsePage(rp)) : undefined,
+              }}
+            />
+          )}
         </section>
       </div>
     </main>

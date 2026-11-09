@@ -1,21 +1,41 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
+import { Pagination } from "@/components/pagination";
 import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
+import { clampPage, pageCount, pageRange, parsePage } from "@/lib/paging";
 import { dataMayBeOld, sourceHealth } from "@/lib/source-health";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function SourcesPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function SourcesPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ page?: string }>;
+}) {
   const { locale } = await params;
+  const { page: pageParam } = await searchParams;
   setRequestLocale(locale);
   const t = await getTranslations("sources");
   const format = await getFormatter();
   const supabase = await createClient();
 
+  // How many sources the user may read (row-level security decides), so the page can be clamped:
+  // a stale link shows the last page instead of an error.
+  const { count: total, error: countError } = await supabase
+    .from("sources")
+    .select("id", { count: "exact", head: true });
+  const pages = pageCount(total ?? 0);
+  const page = clampPage(parsePage(pageParam), pages);
+  const [from, to] = pageRange(page);
+
   // Explicit safe columns: RLS cannot hide sources.config / last_scan_error from users.
-  const { data: sources, error } = await supabase
+  const { data: sources, error: listError } = await supabase
     .from("sources")
     .select("id, name, requires_login, is_active, last_scan_at, last_scan_status")
-    .order("id");
+    .order("id")
+    .range(from, to);
+  const error = countError ?? listError;
   const access = await getAccessState(supabase);
   if (!access) {
     return (
@@ -99,6 +119,8 @@ export default async function SourcesPage({ params }: { params: Promise<{ locale
           );
         })}
       </ul>
+
+      {!error && <Pagination page={page} pages={pages} pathname="/sources" />}
     </main>
   );
 }

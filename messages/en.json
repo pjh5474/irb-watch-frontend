@@ -125,6 +125,8 @@
     "scanAll": "Scan all sources",
     "sendTestMail": "Send test email",
     "testMailSent": "Test email sent to your own address. Check your inbox and the spam folder.",
+    "sendWeeklyPreview": "Send weekly report preview",
+    "weeklyPreviewSent": "Preview of the weekly report sent to your own address only. Check your inbox and the spam folder.",
     "scanStarted": "Scan of {name} started. The result appears here when it is done.",
     "scanAllStarted": "Scan of all sources started.",
     "lastScan": "Last scan: {date} ({status})",

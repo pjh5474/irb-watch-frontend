@@ -82,6 +82,20 @@ export function AdminSources() {
     });
   }
 
+  // The weekly usage report for the last 7 days, to the signed-in admin's own address only (not
+  // to the other admins). It shares the guard of the test mail, so the two never run together.
+  async function sendWeeklyPreview() {
+    setMessage(null);
+    await mail.run(async () => {
+      try {
+        await adminApi.sendWeeklyPreview();
+        setMessage({ kind: "ok", text: t("weeklyPreviewSent") });
+      } catch (e) {
+        setMessage({ kind: "error", text: adminErrorText(e, t) });
+      }
+    });
+  }
+
   async function addSource(event: React.FormEvent) {
     event.preventDefault();
     setMessage(null);
@@ -109,6 +123,10 @@ export function AdminSources() {
           <Button variant="outline" size="sm" onClick={sendTestMail} disabled={mail.busy} aria-busy={mail.busy}>
             {mail.busy && <Spinner aria-hidden />}
             {t("sendTestMail")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={sendWeeklyPreview} disabled={mail.busy} aria-busy={mail.busy}>
+            {mail.busy && <Spinner aria-hidden />}
+            {t("sendWeeklyPreview")}
           </Button>
           <Button variant="outline" size="sm" onClick={scanAll} disabled={scan.busy}>
             {scan.busy && <Spinner aria-hidden />}

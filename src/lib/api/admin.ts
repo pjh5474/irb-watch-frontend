@@ -45,6 +45,8 @@ export const adminApi = {
   scanAll: () => apiFetch<{ status: string }>("/admin/scans/run-all", { method: "POST" }),
   // A short mail to the calling admin's own address, to check the mail settings.
   sendTestMail: () => apiFetch<{ status: string }>("/admin/mail/test", { method: "POST" }),
+  // The weekly usage report for the last 7 days, sent to the calling admin's own address only.
+  sendWeeklyPreview: () => apiFetch<{ status: string }>("/admin/mail/weekly-preview", { method: "POST" }),
 
   members: (id: number) => apiFetch<SourceMember[]>(`/admin/sources/${id}/members`),
   addMember: (id: number, email: string) =>

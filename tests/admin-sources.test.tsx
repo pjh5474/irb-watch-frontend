@@ -11,6 +11,7 @@ import { ApiError } from "../src/lib/api/client";
 const api = vi.hoisted(() => ({
   calls: [] as string[],
   testMail: async (): Promise<unknown> => ({ status: "sent" }),
+  weekly: async (): Promise<unknown> => ({ status: "sent" }),
 }));
 
 vi.mock("@/i18n/navigation", async () => {
@@ -34,6 +35,10 @@ vi.mock("@/lib/api/admin", async () => {
         api.calls.push("sendTestMail");
         return api.testMail();
       },
+      sendWeeklyPreview: async () => {
+        api.calls.push("sendWeeklyPreview");
+        return api.weekly();
+      },
     },
   };
 });
@@ -52,8 +57,61 @@ function show() {
 beforeEach(() => {
   api.calls.length = 0;
   api.testMail = async () => ({ status: "sent" });
+  api.weekly = async () => ({ status: "sent" });
 });
 afterEach(cleanup);
+
+describe("weekly report preview button", () => {
+  it("sends one preview and says it went to the admin's own address only", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Send weekly report preview" }));
+    expect(await screen.findByText(/sent to your own address only/)).toBeTruthy();
+    expect(api.calls).toEqual(["sendWeeklyPreview"]);
+  });
+
+  it("two clicks in the same instant send one preview", async () => {
+    let finish: (v: unknown) => void = () => {};
+    api.weekly = () => new Promise((resolve) => (finish = resolve));
+    show();
+    const button = await screen.findByRole("button", { name: "Send weekly report preview" });
+    act(() => {
+      button.click();
+      button.click();
+    });
+    expect(api.calls).toHaveLength(1);
+    await act(async () => finish({ status: "sent" }));
+    expect(await screen.findByText(/sent to your own address only/)).toBeTruthy();
+  });
+
+  it("the test mail and the preview share one guard: only one runs at a time", async () => {
+    let finish: (v: unknown) => void = () => {};
+    api.weekly = () => new Promise((resolve) => (finish = resolve));
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Send weekly report preview" }));
+    expect((screen.getByRole("button", { name: "Send test email" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => finish({ status: "sent" }));
+    await screen.findByText(/sent to your own address only/);
+    expect(api.calls).toEqual(["sendWeeklyPreview"]);
+  });
+
+  it("shows the server's reason when the preview cannot be sent", async () => {
+    api.weekly = async () => {
+      throw new ApiError(409, "email is not set up on this server (RESEND_API_KEY, MAIL_FROM, APP_URL)");
+    };
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Send weekly report preview" }));
+    expect(await screen.findByText(/RESEND_API_KEY/)).toBeTruthy();
+  });
+
+  it("shows the mail service's reason when it refuses the send", async () => {
+    api.weekly = async () => {
+      throw new ApiError(502, "the mail service refused the message (HTTP 403: domain is not verified)");
+    };
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Send weekly report preview" }));
+    expect(await screen.findByText(/domain is not verified/)).toBeTruthy();
+  });
+});
 
 describe("send test email button", () => {
   it("sends one test mail and says where to look for it", async () => {

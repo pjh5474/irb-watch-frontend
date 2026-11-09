@@ -315,35 +315,42 @@ export type Database = {
           },
         ]
       }
-      source_access: {
+      source_members: {
         Row: {
-          expires_at: string
+          added_at: string
+          added_by: string | null
           source_id: number
           user_id: string
-          verified_at: string
         }
         Insert: {
-          expires_at: string
+          added_at?: string
+          added_by?: string | null
           source_id: number
           user_id: string
-          verified_at?: string
         }
         Update: {
-          expires_at?: string
+          added_at?: string
+          added_by?: string | null
           source_id?: number
           user_id?: string
-          verified_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "source_access_source_id_fkey"
+            foreignKeyName: "source_members_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_members_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "sources"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "source_access_user_id_fkey"
+            foreignKeyName: "source_members_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -354,6 +361,7 @@ export type Database = {
       sources: {
         Row: {
           adapter: string
+          ai_enabled: boolean
           config: Json
           created_at: string
           created_by: string | null
@@ -371,6 +379,7 @@ export type Database = {
         }
         Insert: {
           adapter: string
+          ai_enabled?: boolean
           config?: Json
           created_at?: string
           created_by?: string | null
@@ -388,6 +397,7 @@ export type Database = {
         }
         Update: {
           adapter?: string
+          ai_enabled?: boolean
           config?: Json
           created_at?: string
           created_by?: string | null

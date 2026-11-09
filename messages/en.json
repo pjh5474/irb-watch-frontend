@@ -87,6 +87,7 @@
     "thinking": "Thinking...",
     "off": "The assistant is not available.",
     "placeholder": "Type a question",
+    "waiting": "Waiting for the answer...",
     "send": "Send",
     "stop": "Stop",
     "usage": "{used} of {limit} messages used in the last 24 hours",

@@ -252,6 +252,22 @@ describe("asking", () => {
     await screen.findByText(/Stopped/);
   });
 
+  it("locks the input while the answer is written and unlocks and refocuses it afterwards", async () => {
+    (api.script as Script).waitForAbort = true;
+    show();
+    openPanel();
+    await screen.findByText(/Ask about the documents/);
+    ask("Slow one");
+    await screen.findByRole("button", { name: "Stop" });
+    expect(box().disabled).toBe(true);
+    expect(box().placeholder).toBe("Waiting for the answer...");
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await screen.findByText(/Stopped/);
+    await waitFor(() => expect(box().disabled).toBe(false));
+    expect(box().placeholder).toBe("Type a question");
+    expect(document.activeElement).toBe(box());
+  });
+
   it("Stop ends the wait, keeps the saved question and says so", async () => {
     (api.script as Script).waitForAbort = true;
     show();

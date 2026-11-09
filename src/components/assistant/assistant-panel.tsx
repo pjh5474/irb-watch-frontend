@@ -88,8 +88,9 @@ export function AssistantPanel() {
   }, [open, pathname]);
 
   useEffect(() => {
-    if (open && view === "chat") input.current?.focus();
-  }, [open, view, conversationId]);
+    // Also when an answer has finished (the box was locked and lost the cursor).
+    if (open && view === "chat" && !send.busy) input.current?.focus();
+  }, [open, view, conversationId, send.busy]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView?.({ block: "end" });
@@ -329,11 +330,7 @@ export function AssistantPanel() {
               {pending && (
                 <>
                   {(messages.data?.length ?? 0) <= pending.baseCount && (
-                    <li className="self-end">
-                      <p className="max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm whitespace-pre-wrap text-primary-foreground">
-                        {pending.question}
-                      </p>
-                    </li>
+                    <UserBubble>{pending.question}</UserBubble>
                   )}
                   {(messages.data?.length ?? 0) < pending.baseCount + 2 && (
                     <li className="flex flex-col gap-1">
@@ -408,9 +405,11 @@ export function AssistantPanel() {
               }}
               rows={2}
               maxLength={MAX_CHARS}
-              placeholder={t("placeholder")}
+              placeholder={send.busy ? t("waiting") : t("placeholder")}
               aria-label={t("placeholder")}
-              disabled={unavailable}
+              // Locked while an answer is being written, so a second question cannot be typed
+              // into the box and then silently ignored.
+              disabled={unavailable || send.busy}
               className="max-h-40 min-h-[2.75rem] flex-1 resize-none rounded border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-neutral-100 dark:disabled:bg-neutral-800"
             />
             {send.busy ? (
@@ -433,6 +432,20 @@ export function AssistantPanel() {
   );
 }
 
+// The user's own message, on the right. The width limit is on the list item (a child of the
+// full-width column), not on the text: a percentage on the text would be taken from a box that
+// shrinks to the text and collapse the bubble. One component, so the bubble drawn while the
+// answer is written and the saved one that replaces it can never look different.
+function UserBubble({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="max-w-[85%] self-end">
+      <p className="rounded-lg bg-primary px-3 py-2 text-sm break-words whitespace-pre-wrap text-primary-foreground">
+        {children}
+      </p>
+    </li>
+  );
+}
+
 function MessageRow({
   message,
   live,
@@ -446,15 +459,7 @@ function MessageRow({
   onConfirm: (a: ActionCard) => void;
   onDismiss: (a: ActionCard) => void;
 }) {
-  if (message.role === "user") {
-    return (
-      <li className="self-end">
-        <p className="max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm whitespace-pre-wrap text-primary-foreground">
-          {message.content}
-        </p>
-      </li>
-    );
-  }
+  if (message.role === "user") return <UserBubble>{message.content}</UserBubble>;
   return (
     <li className="flex flex-col gap-2">
       <div className="rounded-lg bg-muted px-3 py-2">

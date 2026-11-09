@@ -53,13 +53,17 @@ export default async function SourcesPage({ params }: { params: Promise<{ locale
       {!error && sources?.length === 0 && <p className="mt-6 text-sm opacity-70">{t("empty")}</p>}
 
       <ul className="mt-6 flex flex-col gap-3">
-        {sources?.map((source) => {
+        {sources?.map((source, index) => {
           const locked = isLocked(source, access);
           const count = counts.get(source.id) ?? null;
           return (
-            <li key={source.id} className="rounded border p-4">
+            <li
+              key={source.id}
+              className="reveal rounded border p-4"
+              style={{ "--i": index } as React.CSSProperties}
+            >
               <h2 className="font-medium">
-                <Link href={`/sources/${source.id}`} className="underline">
+                <Link href={`/sources/${source.id}`} className="underline-offset-4 hover:underline">
                   {source.name}
                 </Link>
               </h2>

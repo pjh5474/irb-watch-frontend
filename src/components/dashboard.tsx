@@ -1,12 +1,23 @@
 import { getFormatter, getTranslations } from "next-intl/server";
+import { CountUp } from "@/components/count-up";
 import { recentCutoff, RECENT_DAYS } from "@/lib/recent";
 import { createClient } from "@/lib/supabase/server";
 
 type SourceRef = { id: number; is_active: boolean; last_scan_at: string | null };
 
-function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Tile({
+  label,
+  value,
+  hint,
+  index,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: string;
+  index: number;
+}) {
   return (
-    <div className="rounded border p-3">
+    <div className="reveal rounded border p-3" style={{ "--i": index } as React.CSSProperties}>
       <dt className="text-xs opacity-70">{label}</dt>
       <dd className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd>
       {hint && <p className="mt-1 text-xs opacity-60">{hint}</p>}
@@ -37,7 +48,7 @@ export async function Dashboard({ sources }: { sources: SourceRef[] | null }) {
   // sources === null: the list of sources could not be read.
   const failed = Boolean(saved.error || added.error || updated.error) || sources === null;
   const number = (r: { count: number | null; error: unknown }) =>
-    r.error || r.count === null ? "—" : format.number(r.count);
+    r.error || r.count === null ? "—" : <CountUp value={r.count} />;
 
   const watched = sources === null ? null : sources.filter((s) => s.is_active).length;
   const lastScan = (sources ?? [])
@@ -49,11 +60,12 @@ export async function Dashboard({ sources }: { sources: SourceRef[] | null }) {
   return (
     <section aria-label={t("title")} className="mt-6">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Tile label={t("saved")} value={number(saved)} />
-        <Tile label={t("sources")} value={watched === null ? "—" : format.number(watched)} />
-        <Tile label={t("added", { days: RECENT_DAYS })} value={number(added)} />
-        <Tile label={t("updated", { days: RECENT_DAYS })} value={number(updated)} />
+        <Tile index={0} label={t("saved")} value={number(saved)} />
+        <Tile index={1} label={t("sources")} value={watched === null ? "—" : <CountUp value={watched} />} />
+        <Tile index={2} label={t("added", { days: RECENT_DAYS })} value={number(added)} />
+        <Tile index={3} label={t("updated", { days: RECENT_DAYS })} value={number(updated)} />
         <Tile
+          index={4}
           label={t("lastScan")}
           value={
             sources === null

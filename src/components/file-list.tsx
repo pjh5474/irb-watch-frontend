@@ -64,10 +64,14 @@ export function FileList({ files }: { files: FileRow[] }) {
 
   return (
     <ul className="flex flex-col gap-2">
-      {files.map((file) => {
+      {files.map((file, index) => {
         const busy = busyIds.includes(file.id);
         return (
-          <li key={file.id} className="flex flex-wrap items-center gap-3 rounded border p-3 text-sm">
+          <li
+            key={file.id}
+            className="reveal flex flex-wrap items-center gap-3 rounded border p-3 text-sm"
+            style={{ "--i": index } as React.CSSProperties}
+          >
             <span className="font-medium">{file.filename}</span>
             {file.size_label && <span className="opacity-70">{file.size_label}</span>}
             {file.note && <span className="opacity-70">{file.note}</span>}

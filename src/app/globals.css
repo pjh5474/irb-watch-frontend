@@ -121,6 +121,80 @@
   }
 }
 
+/* ---- Subtle motion (150 to 300 ms, a few pixels). All of it is switched off below for
+   people who ask their system for reduced motion. ---- */
+
+@keyframes irb-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes irb-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A card or list row: fades up when the page loads (staggered with style="--i: index", at
+   most 12 steps) and lifts a little on hover. `backwards` keeps the hover transform working
+   after the entrance has finished. */
+.reveal {
+  animation: irb-enter 280ms ease-out backwards;
+  animation-delay: calc(min(var(--i, 0), 12) * 45ms);
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    border-color 150ms ease;
+}
+.reveal:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px oklch(0 0 0 / 12%);
+  border-color: color-mix(in oklch, var(--foreground) 35%, var(--border));
+}
+
+/* Messages and inline confirms slide open when they appear. Every alert and status line gets
+   it automatically; use the class for other elements. */
+.animate-open,
+:is(p, div)[role="alert"],
+:is(p, div)[role="status"] {
+  animation: irb-open 200ms ease-out;
+}
+
+a {
+  transition:
+    opacity 150ms ease,
+    color 150ms ease;
+}
+a:hover {
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .animate-open,
+  :is(p, div)[role="alert"],
+  :is(p, div)[role="status"] {
+    animation: none;
+  }
+  .reveal,
+  a {
+    transition: none;
+  }
+  .reveal:hover {
+    transform: none;
+  }
+}
+
 /* Top-of-page loading bar (components/nav-progress.tsx): a segment sliding across. */
 @keyframes irb-progress {
   from {

@@ -58,10 +58,14 @@ export async function RecentDocuments({ sources }: { sources: SourceRef[] }) {
       {!failed && withNew.length === 0 && <p className="mt-3 text-sm opacity-70">{t("empty", { days: RECENT_DAYS })}</p>}
 
       <ul className="mt-3 flex flex-col gap-3">
-        {withNew.map(({ source, count, latest }) => (
-          <li key={source.id} className="rounded border p-4">
+        {withNew.map(({ source, count, latest }, index) => (
+          <li
+            key={source.id}
+            className="reveal rounded border p-4"
+            style={{ "--i": index } as React.CSSProperties}
+          >
             <div className="flex flex-wrap items-center gap-2">
-              <Link href={`/sources/${source.id}?new=1`} className="font-medium underline">
+              <Link href={`/sources/${source.id}?new=1`} className="font-medium underline-offset-4 hover:underline">
                 {source.name}
               </Link>
               <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-800 dark:bg-green-900/40 dark:text-green-100">
@@ -71,14 +75,14 @@ export async function RecentDocuments({ sources }: { sources: SourceRef[] }) {
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
               {latest.map((doc) => (
                 <li key={doc.id}>
-                  <Link href={`/documents/${doc.id}`} className="underline">
+                  <Link href={`/documents/${doc.id}`} className="underline-offset-4 hover:underline">
                     {doc.title}
                   </Link>
                 </li>
               ))}
             </ul>
             {count > latest.length && (
-              <Link href={`/sources/${source.id}?new=1`} className="mt-2 inline-block text-sm underline">
+              <Link href={`/sources/${source.id}?new=1`} className="mt-2 inline-block text-sm underline-offset-4 hover:underline">
                 {t("showAll", { n: count })}
               </Link>
             )}

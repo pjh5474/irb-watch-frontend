@@ -91,13 +91,13 @@ export function SummaryPanel({
         {canRegenerate && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
             {regenerating ? (
-              <>
+              <span className="animate-open flex flex-wrap items-center gap-2">
                 <Spinner aria-hidden />
                 <span>{t("regenerating")}</span>
                 <span className="opacity-70">{t("summarizingHint")}</span>
-              </>
+              </span>
             ) : confirming ? (
-              <>
+              <span className="animate-open flex flex-wrap items-center gap-2">
                 <span>{t("regenerateConfirm")}</span>
                 <Button size="sm" onClick={regenerate}>
                   {t("regenerateYes")}
@@ -105,7 +105,7 @@ export function SummaryPanel({
                 <Button size="sm" variant="outline" onClick={() => setConfirming(false)}>
                   {t("regenerateNo")}
                 </Button>
-              </>
+              </span>
             ) : (
               <Button size="sm" variant="outline" onClick={() => setConfirming(true)}>
                 {t("regenerate")}

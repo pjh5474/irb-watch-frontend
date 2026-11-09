@@ -86,10 +86,13 @@ export default async function DocumentPage({
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap gap-4 text-sm">
-          <Link href="/" className="underline">
+          <Link href="/" className="underline-offset-4 hover:underline">
             ← {t("back")}
           </Link>
-          <Link href={`/sources/${document.source_id}`} className="underline">
+          <Link
+            href={`/sources/${document.source_id}`}
+            className="underline-offset-4 hover:underline"
+          >
             ← {source?.name ?? t("backToSource")}
           </Link>
         </div>

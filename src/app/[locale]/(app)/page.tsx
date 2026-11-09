@@ -85,12 +85,16 @@ export default async function FeedPage({
           {!error && cards?.length === 0 && <p className="mt-3 text-sm opacity-70">{t("empty")}</p>}
 
           <ul className="mt-3 flex flex-col gap-3">
-            {cards?.map((card) => {
+            {cards?.map((card, index) => {
               const payload = (card.payload ?? {}) as { version_no?: number };
               // event_type is "document.updated" etc.; message keys cannot contain dots.
               const eventKey = `event.${card.event_type.replace(/^document\./, "")}` as const;
               return (
-                <li key={card.id} className="rounded border p-4">
+                <li
+                  key={card.id}
+                  className="reveal rounded border p-4"
+                  style={{ "--i": index } as React.CSSProperties}
+                >
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="rounded bg-neutral-900 px-2 py-0.5 text-white">
                       {t.has(eventKey) ? t(eventKey) : card.event_type}
@@ -112,7 +116,10 @@ export default async function FeedPage({
                   </div>
                   <h3 className="mt-2 font-medium">
                     {card.document_id !== null && openableIds.has(card.document_id) ? (
-                      <Link href={`/documents/${card.document_id}`} className="underline">
+                      <Link
+                        href={`/documents/${card.document_id}`}
+                        className="underline-offset-4 hover:underline"
+                      >
                         {card.title}
                       </Link>
                     ) : (

@@ -59,7 +59,7 @@ export function ServerStatus() {
       aria-live="polite"
       className="flex items-center gap-2 text-xs"
     >
-      <span aria-hidden className={`size-2.5 rounded-full ${DOT[state]}`} />
+      <span aria-hidden className={`size-2.5 rounded-full transition-colors duration-300 ${DOT[state]}`} />
       <span className="hidden sm:inline">{t(state)}</span>
       <span className="sr-only sm:hidden">{t(state)}</span>
     </button>

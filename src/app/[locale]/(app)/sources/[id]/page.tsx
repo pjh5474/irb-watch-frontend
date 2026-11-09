@@ -59,7 +59,7 @@ export default async function SourcePage({
 
   const header = (
     <header className="flex flex-col gap-2">
-      <Link href="/sources" className="text-sm underline">
+      <Link href="/sources" className="text-sm underline-offset-4 hover:underline">
         ← {t("back")}
       </Link>
       <h1 className="text-2xl font-semibold">{source.name}</h1>
@@ -67,7 +67,10 @@ export default async function SourcePage({
         <span className="rounded bg-neutral-100 px-2 py-0.5 dark:bg-neutral-800">
           {onlyNew ? t("viewingNew", { days: RECENT_DAYS }) : t("viewingAll")}
         </span>
-        <Link href={onlyNew ? `/sources/${sourceId}` : `/sources/${sourceId}?new=1`} className="underline">
+        <Link
+          href={onlyNew ? `/sources/${sourceId}` : `/sources/${sourceId}?new=1`}
+          className="underline-offset-4 hover:underline"
+        >
           {onlyNew ? t("showAllDocuments") : t("showOnlyNew", { days: RECENT_DAYS })}
         </Link>
       </div>
@@ -141,12 +144,16 @@ export default async function SourcePage({
       )}
 
       <ul className="flex flex-col gap-3">
-        {docs?.map((doc) => {
+        {docs?.map((doc, index) => {
           const changed = doc.latest_version_id === null ? null : changedAt.get(doc.latest_version_id);
           return (
-            <li key={doc.id} className="rounded border p-4">
+            <li
+              key={doc.id}
+              className="reveal rounded border p-4"
+              style={{ "--i": index } as React.CSSProperties}
+            >
               <h2 className="font-medium">
-                <Link href={`/documents/${doc.id}`} className="underline">
+                <Link href={`/documents/${doc.id}`} className="underline-offset-4 hover:underline">
                   {doc.title}
                 </Link>
               </h2>
@@ -172,7 +179,7 @@ export default async function SourcePage({
       {!error && pages > 1 && (
         <nav aria-label={t("paging")} className="flex items-center justify-between text-sm">
           {page > 1 ? (
-            <Link href={listHref(page - 1)} className="underline">
+            <Link href={listHref(page - 1)} className="underline-offset-4 hover:underline">
               ← {t("previous")}
             </Link>
           ) : (
@@ -180,7 +187,7 @@ export default async function SourcePage({
           )}
           <span className="opacity-70">{t("pageOf", { page, total: pages })}</span>
           {page < pages ? (
-            <Link href={listHref(page + 1)} className="underline">
+            <Link href={listHref(page + 1)} className="underline-offset-4 hover:underline">
               {t("next")} →
             </Link>
           ) : (

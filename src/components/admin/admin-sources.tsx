@@ -112,10 +112,14 @@ export function AdminSources() {
       {query.data?.length === 0 && <p className="mt-6 text-sm opacity-70">{t("noSources")}</p>}
 
       <ul className="mt-6 flex flex-col gap-3">
-        {query.data?.map((source) => (
-          <li key={source.id} className="rounded border p-4">
+        {query.data?.map((source, index) => (
+          <li
+            key={source.id}
+            className="reveal rounded border p-4"
+            style={{ "--i": index } as React.CSSProperties}
+          >
             <div className="flex flex-wrap items-center gap-2">
-              <Link href={`/admin/sources/${source.id}`} className="font-medium underline">
+              <Link href={`/admin/sources/${source.id}`} className="font-medium underline-offset-4 hover:underline">
                 {source.name}
               </Link>
               {source.requires_login ? <Badge tone="warn">{t("membersOnly")}</Badge> : <Badge>{t("public")}</Badge>}

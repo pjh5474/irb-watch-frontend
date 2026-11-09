@@ -36,7 +36,7 @@ export function AdminSource({ id }: { id: number }) {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-      <Link href="/admin/sources" className="text-sm underline">
+      <Link href="/admin/sources" className="text-sm underline-offset-4 hover:underline">
         ← {t("sourcesTitle")}
       </Link>
       {query.isLoading && <p className="text-sm opacity-70">{t("loading")}</p>}
@@ -193,7 +193,7 @@ function AiSwitch({ source }: { source: AdminSource }) {
           </Button>
         </div>
       ) : confirming ? (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
+        <div className="animate-open flex flex-wrap items-center gap-2 text-sm">
           <span>{source.requires_login ? t("aiConfirmOnStudy") : t("aiConfirmOn")}</span>
           <Button size="sm" disabled={flight.busy} onClick={() => void set(true)}>
             {t("yes")}
@@ -317,7 +317,7 @@ function Account({ source }: { source: AdminSource }) {
           </Button>
           {stored &&
             (confirmingDelete ? (
-              <>
+              <span className="animate-open flex flex-wrap items-center gap-2">
                 <span className="text-sm">{t("confirmDeleteLogin")}</span>
                 <Button type="button" size="sm" disabled={flight.busy} onClick={() => void remove()}>
                   {t("yes")}
@@ -325,7 +325,7 @@ function Account({ source }: { source: AdminSource }) {
                 <Button type="button" size="sm" variant="outline" onClick={() => setConfirmingDelete(false)}>
                   {t("no")}
                 </Button>
-              </>
+              </span>
             ) : (
               <Button type="button" size="sm" variant="outline" onClick={() => setConfirmingDelete(true)}>
                 {t("deleteLogin")}
@@ -452,7 +452,7 @@ function Members({ source }: { source: AdminSource }) {
             )}
             <span className="ml-auto flex items-center gap-2">
               {removing === m.user_id ? (
-                <>
+                <span className="animate-open flex items-center gap-2">
                   <span>{t("confirmRemove")}</span>
                   <Button size="sm" disabled={flight.busy} onClick={() => void remove(m.user_id)}>
                     {t("yes")}
@@ -460,7 +460,7 @@ function Members({ source }: { source: AdminSource }) {
                   <Button size="sm" variant="outline" onClick={() => setRemoving(null)}>
                     {t("no")}
                   </Button>
-                </>
+                </span>
               ) : (
                 <Button size="sm" variant="outline" onClick={() => setRemoving(m.user_id)}>
                   {t("removeMember")}

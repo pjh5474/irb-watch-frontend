@@ -44,7 +44,7 @@ export async function RecentDocuments({ sources }: { sources: SourceRef[] }) {
   const withNew = rows.filter((r) => r.count > 0);
 
   return (
-    <section aria-labelledby="recent-title" className="mt-6">
+    <section aria-labelledby="recent-title">
       <h2 id="recent-title" className="text-lg font-semibold">
         {t("title")}
       </h2>

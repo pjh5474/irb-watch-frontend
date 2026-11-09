@@ -1,4 +1,5 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
+import { Dashboard } from "@/components/dashboard";
 import { MarkdownText } from "@/components/markdown-text";
 import { RecentDocuments } from "@/components/recent-documents";
 import { SourceFilter } from "@/components/source-filter";
@@ -28,9 +29,9 @@ export default async function FeedPage({
   const supabase = await createClient();
 
   // Explicit safe columns: RLS cannot hide sources.config / last_scan_error from users.
-  const { data: sources } = await supabase
+  const { data: sources, error: sourcesError } = await supabase
     .from("sources")
-    .select("id, name")
+    .select("id, name, is_active, last_scan_at")
     .order("id");
   const names = new Map((sources ?? []).map((s) => [s.id, s.name]));
   const sourceId = source && /^\d+$/.test(source) ? Number(source) : null;
@@ -53,7 +54,7 @@ export default async function FeedPage({
   const openableIds = new Set((openable ?? []).map((d) => d.id));
 
   return (
-    <main className="mx-auto w-full max-w-3xl p-6">
+    <main className="mx-auto w-full max-w-6xl p-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <SourceFilter
@@ -62,66 +63,76 @@ export default async function FeedPage({
         />
       </div>
 
-      <RecentDocuments
-        sources={(sources ?? []).filter((s) => sourceId === null || s.id === sourceId)}
-      />
+      {/* The numbers cover everything the user may read, whatever the source filter says. */}
+      <Dashboard sources={sourcesError ? null : (sources ?? [])} />
 
-      <h2 className="mt-8 text-lg font-semibold">{t("changesTitle")}</h2>
+      {/* Wide screens: recently added documents on the left, changes on the right. */}
+      <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:items-start">
+        <RecentDocuments
+          sources={(sources ?? []).filter((s) => sourceId === null || s.id === sourceId)}
+        />
 
-      {error && (
-        <p role="alert" className="mt-3 text-sm text-red-600">
-          {t("loadError")}
-        </p>
-      )}
-      {!error && cards?.length === 0 && <p className="mt-3 text-sm opacity-70">{t("empty")}</p>}
+        <section aria-labelledby="changes-title">
+          <h2 id="changes-title" className="text-lg font-semibold">
+            {t("changesTitle")}
+          </h2>
 
-      <ul className="mt-3 flex flex-col gap-3">
-        {cards?.map((card) => {
-          const payload = (card.payload ?? {}) as { version_no?: number };
-          // event_type is "document.updated" etc.; message keys cannot contain dots.
-          const eventKey = `event.${card.event_type.replace(/^document\./, "")}` as const;
-          return (
-            <li key={card.id} className="rounded border p-4">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="rounded bg-neutral-900 px-2 py-0.5 text-white">
-                  {t.has(eventKey) ? t(eventKey) : card.event_type}
-                </span>
-                {card.priority && (
-                  <span className={`rounded px-2 py-0.5 ${PRIORITY_STYLE[card.priority]}`}>
-                    {t(`priority.${card.priority}`)}
-                  </span>
-                )}
-                {card.source_id !== null && (
-                  <span className="opacity-70">{names.get(card.source_id) ?? ""}</span>
-                )}
-                {payload.version_no !== undefined && (
-                  <span className="opacity-70">{t("version", { n: payload.version_no })}</span>
-                )}
-                <time className="ml-auto opacity-70" dateTime={card.created_at}>
-                  {format.dateTime(new Date(card.created_at), { dateStyle: "medium", timeStyle: "short" })}
-                </time>
-              </div>
-              <h2 className="mt-2 font-medium">
-                {card.document_id !== null && openableIds.has(card.document_id) ? (
-                  <Link href={`/documents/${card.document_id}`} className="underline">
-                    {card.title}
-                  </Link>
-                ) : (
-                  card.title
-                )}
-              </h2>
-              {card.document_id !== null && !openableIds.has(card.document_id) && (
-                <p className="mt-1 text-xs opacity-60">{t("documentGone")}</p>
-              )}
-              {card.summary ? (
-                <MarkdownText className="mt-1 opacity-80">{card.summary}</MarkdownText>
-              ) : (
-                <p className="mt-1 text-sm opacity-80">{t("noSummary")}</p>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+          {error && (
+            <p role="alert" className="mt-3 text-sm text-red-600">
+              {t("loadError")}
+            </p>
+          )}
+          {!error && cards?.length === 0 && <p className="mt-3 text-sm opacity-70">{t("empty")}</p>}
+
+          <ul className="mt-3 flex flex-col gap-3">
+            {cards?.map((card) => {
+              const payload = (card.payload ?? {}) as { version_no?: number };
+              // event_type is "document.updated" etc.; message keys cannot contain dots.
+              const eventKey = `event.${card.event_type.replace(/^document\./, "")}` as const;
+              return (
+                <li key={card.id} className="rounded border p-4">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="rounded bg-neutral-900 px-2 py-0.5 text-white">
+                      {t.has(eventKey) ? t(eventKey) : card.event_type}
+                    </span>
+                    {card.priority && (
+                      <span className={`rounded px-2 py-0.5 ${PRIORITY_STYLE[card.priority]}`}>
+                        {t(`priority.${card.priority}`)}
+                      </span>
+                    )}
+                    {card.source_id !== null && (
+                      <span className="opacity-70">{names.get(card.source_id) ?? ""}</span>
+                    )}
+                    {payload.version_no !== undefined && (
+                      <span className="opacity-70">{t("version", { n: payload.version_no })}</span>
+                    )}
+                    <time className="ml-auto opacity-70" dateTime={card.created_at}>
+                      {format.dateTime(new Date(card.created_at), { dateStyle: "medium", timeStyle: "short" })}
+                    </time>
+                  </div>
+                  <h3 className="mt-2 font-medium">
+                    {card.document_id !== null && openableIds.has(card.document_id) ? (
+                      <Link href={`/documents/${card.document_id}`} className="underline">
+                        {card.title}
+                      </Link>
+                    ) : (
+                      card.title
+                    )}
+                  </h3>
+                  {card.document_id !== null && !openableIds.has(card.document_id) && (
+                    <p className="mt-1 text-xs opacity-60">{t("documentGone")}</p>
+                  )}
+                  {card.summary ? (
+                    <MarkdownText className="mt-1 opacity-80">{card.summary}</MarkdownText>
+                  ) : (
+                    <p className="mt-1 text-sm opacity-80">{t("noSummary")}</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      </div>
     </main>
   );
 }

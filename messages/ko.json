@@ -16,14 +16,14 @@
     "recheck": "클릭하면 서버를 다시 확인합니다"
   },
   "nav": {
-    "feed": "변경 내역",
+    "feed": "현황",
     "sources": "출처",
     "admin": "관리",
     "signOut": "로그아웃",
     "language": "English"
   },
   "doc": {
-    "back": "변경 내역",
+    "back": "현황",
     "backToSource": "출처",
     "original": "원문 보기",
     "removed": "삭제된 문서",
@@ -171,6 +171,16 @@
     "removeMember": "제외",
     "confirmRemove": "이 사용자를 제외할까요?"
   },
+  "dashboard": {
+    "title": "주요 수치",
+    "saved": "저장된 문서",
+    "sources": "감시 중인 출처",
+    "added": "최근 {days}일 새 문서",
+    "updated": "최근 {days}일 수정",
+    "lastScan": "마지막 수집",
+    "never": "없음",
+    "loadError": "일부 숫자를 불러오지 못했습니다."
+  },
   "recent": {
     "title": "최근 추가된 문서",
     "hint": "최근 {days}일 안에 IRB Watch가 처음 확인한 문서입니다. 출처의 첫 수집에서 발견된 문서도 포함됩니다.",
@@ -181,7 +191,7 @@
   },
   "feed": {
     "changesTitle": "변경 내역",
-    "title": "변경 내역",
+    "title": "현황",
     "empty": "표시할 변경 내역이 없습니다.",
     "allSources": "모든 출처",
     "filterLabel": "출처",

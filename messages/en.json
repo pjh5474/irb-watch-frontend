@@ -16,14 +16,14 @@
     "recheck": "Click to check the server again"
   },
   "nav": {
-    "feed": "Changes",
+    "feed": "Overview",
     "sources": "Sources",
     "admin": "Admin",
     "signOut": "Sign out",
     "language": "한국어"
   },
   "doc": {
-    "back": "Changes",
+    "back": "Overview",
     "backToSource": "Source",
     "original": "View original",
     "removed": "Removed document",
@@ -171,6 +171,16 @@
     "removeMember": "Remove",
     "confirmRemove": "Remove this user?"
   },
+  "dashboard": {
+    "title": "Key numbers",
+    "saved": "Documents saved",
+    "sources": "Sources watched",
+    "added": "New in {days} days",
+    "updated": "Updated in {days} days",
+    "lastScan": "Last scan",
+    "never": "Never",
+    "loadError": "Some numbers could not be loaded."
+  },
   "recent": {
     "title": "Recently added documents",
     "hint": "Documents IRB Watch first saw in the last {days} days. Documents found by a source's first scan count too.",
@@ -181,7 +191,7 @@
   },
   "feed": {
     "changesTitle": "Changes",
-    "title": "Changes",
+    "title": "Overview",
     "empty": "No changes to show.",
     "allSources": "All sources",
     "filterLabel": "Source",

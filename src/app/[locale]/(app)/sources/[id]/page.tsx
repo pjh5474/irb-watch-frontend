@@ -41,6 +41,15 @@ export default async function SourcePage({
   if (!source) notFound();
 
   const access = await getAccessState(supabase);
+  if (!access) {
+    return (
+      <main className="mx-auto w-full max-w-3xl p-6">
+        <p role="alert" className="text-sm text-red-600">
+          {t("loadError")}
+        </p>
+      </main>
+    );
+  }
   const locked = isLocked(source, access);
 
   const header = (
@@ -87,6 +96,9 @@ export default async function SourcePage({
     .order("id", { ascending: false })
     .range(from, from + PAGE_SIZE - 1);
 
+  // A start row past the last one makes PostgREST answer 416 (PGRST103) with no count: that
+  // is a page that does not exist, not a server failure.
+  if (error?.code === "PGRST103") notFound();
   const total = count ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   if (!error && page > pages) notFound();

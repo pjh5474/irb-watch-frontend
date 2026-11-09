@@ -16,6 +16,16 @@ export default async function SourcesPage({ params }: { params: Promise<{ locale
     .select("id, name, requires_login, is_active, last_scan_at")
     .order("id");
   const access = await getAccessState(supabase);
+  if (!access) {
+    return (
+      <main className="mx-auto w-full max-w-3xl p-6">
+        <h1 className="text-2xl font-semibold">{t("title")}</h1>
+        <p role="alert" className="mt-6 text-sm text-red-600">
+          {t("loadError")}
+        </p>
+      </main>
+    );
+  }
 
   // null = locked or the count failed; the card says which, so a failure never reads as "0".
   const counts = new Map<number, number | null>(

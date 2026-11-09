@@ -6,12 +6,14 @@ export type AccessState = { isAdmin: boolean; proven: ReadonlySet<number> };
 
 // What the signed-in user may open. UI hint only: row-level security still decides what the
 // database returns, this just lets a page say "locked" instead of showing an empty list.
-export async function getAccessState(supabase: Client): Promise<AccessState> {
+// Returns null when it could not be read: a failed lookup must never look like "no access"
+// (an admin would see every members-only board as locked), so the page shows a load error.
+export async function getAccessState(supabase: Client): Promise<AccessState | null> {
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
-  if (!userId) return { isAdmin: false, proven: new Set() };
+  if (!userId) return null;
 
-  const [{ data: profile }, { data: proofs }] = await Promise.all([
+  const [{ data: profile, error: profileError }, { data: proofs, error: proofsError }] = await Promise.all([
     supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
     supabase
       .from("source_access")
@@ -19,8 +21,9 @@ export async function getAccessState(supabase: Client): Promise<AccessState> {
       .eq("user_id", userId)
       .gt("expires_at", new Date().toISOString()),
   ]);
+  if (profileError || proofsError || !profile) return null;
   return {
-    isAdmin: profile?.role === "admin",
+    isAdmin: profile.role === "admin",
     proven: new Set((proofs ?? []).map((p) => p.source_id)),
   };
 }

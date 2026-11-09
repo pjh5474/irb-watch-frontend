@@ -122,6 +122,8 @@
     "scanning": "수집 중...",
     "scanNow": "지금 수집",
     "scanAll": "전체 출처 수집",
+    "sendTestMail": "테스트 메일 보내기",
+    "testMailSent": "내 이메일 주소로 테스트 메일을 보냈습니다. 받은편지함과 스팸함을 확인해 주세요.",
     "scanStarted": "{name} 수집을 시작했습니다. 끝나면 결과가 여기에 표시됩니다.",
     "scanAllStarted": "전체 출처 수집을 시작했습니다.",
     "lastScan": "마지막 수집: {date} ({status})",

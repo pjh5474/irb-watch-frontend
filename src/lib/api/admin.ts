@@ -43,6 +43,8 @@ export const adminApi = {
   ) => apiFetch<AdminSource>(`/admin/sources/${id}`, json("PATCH", body)),
   scanSource: (id: number) => apiFetch<{ status: string }>(`/admin/sources/${id}/scan`, { method: "POST" }),
   scanAll: () => apiFetch<{ status: string }>("/admin/scans/run-all", { method: "POST" }),
+  // A short mail to the calling admin's own address, to check the mail settings.
+  sendTestMail: () => apiFetch<{ status: string }>("/admin/mail/test", { method: "POST" }),
 
   members: (id: number) => apiFetch<SourceMember[]>(`/admin/sources/${id}/members`),
   addMember: (id: number, email: string) =>

@@ -29,6 +29,7 @@ export function AdminSources() {
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const scan = useSingleFlight();
   const add = useSingleFlight();
+  const mail = useSingleFlight();
   const [form, setForm] = useState({ name: "", url: "", login: "" });
 
   // While any scan runs, ask again every 4 seconds so its result shows up by itself.
@@ -67,6 +68,20 @@ export function AdminSources() {
     });
   }
 
+  // Sends a test mail to the signed-in admin's own address. The server answers 409 when mail is
+  // not set up and 502 with the mail service's reason when the send is refused; both are shown.
+  async function sendTestMail() {
+    setMessage(null);
+    await mail.run(async () => {
+      try {
+        await adminApi.sendTestMail();
+        setMessage({ kind: "ok", text: t("testMailSent") });
+      } catch (e) {
+        setMessage({ kind: "error", text: adminErrorText(e, t) });
+      }
+    });
+  }
+
   async function addSource(event: React.FormEvent) {
     event.preventDefault();
     setMessage(null);
@@ -90,10 +105,16 @@ export function AdminSources() {
     <main className="mx-auto w-full max-w-3xl p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{t("sourcesTitle")}</h1>
-        <Button variant="outline" size="sm" onClick={scanAll} disabled={scan.busy}>
-          {scan.busy && <Spinner aria-hidden />}
-          {t("scanAll")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={sendTestMail} disabled={mail.busy} aria-busy={mail.busy}>
+            {mail.busy && <Spinner aria-hidden />}
+            {t("sendTestMail")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={scanAll} disabled={scan.busy}>
+            {scan.busy && <Spinner aria-hidden />}
+            {t("scanAll")}
+          </Button>
+        </div>
       </div>
 
       {message && (

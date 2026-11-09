@@ -1,7 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import type { components } from "@/lib/types/api";
 
@@ -13,8 +15,9 @@ export type FileRow = {
   note: string | null;
 };
 
-function errorKey(error: unknown): "notFound" | "limit" | "unavailable" | "generic" {
+function errorKey(error: unknown): "notFound" | "limit" | "unavailable" | "unreachable" | "generic" {
   if (error instanceof ApiError) {
+    if (error.status === 0) return "unreachable";
     if (error.status === 404) return "notFound";
     if (error.status === 429) return "limit";
     if (error.status === 503) return "unavailable";
@@ -24,13 +27,18 @@ function errorKey(error: unknown): "notFound" | "limit" | "unavailable" | "gener
 
 export function FileList({ files }: { files: FileRow[] }) {
   const t = useTranslations("doc");
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [busyIds, setBusyIds] = useState<readonly number[]>([]);
   const [errors, setErrors] = useState<Record<number, string>>({});
+  // A ref, not state: state only changes after the next render, so two clicks in the same
+  // instant would both pass a state check. Each click also counts toward the daily cap.
+  const inFlight = useRef(new Set<number>());
 
   // The link is requested only on click and opened at once: it lives 60 seconds and every
   // request counts toward the daily cap, so it is never prefetched, cached or rendered.
   async function download(file: FileRow) {
-    setBusyId(file.id);
+    if (inFlight.current.has(file.id)) return;
+    inFlight.current.add(file.id);
+    setBusyIds((prev) => [...prev, file.id]);
     setErrors((prev) => ({ ...prev, [file.id]: "" }));
     try {
       const link = await apiFetch<components["schemas"]["DownloadLinkOut"]>(
@@ -47,7 +55,8 @@ export function FileList({ files }: { files: FileRow[] }) {
     } catch (error) {
       setErrors((prev) => ({ ...prev, [file.id]: t(`downloadError.${errorKey(error)}`) }));
     } finally {
-      setBusyId(null);
+      inFlight.current.delete(file.id);
+      setBusyIds((prev) => prev.filter((id) => id !== file.id));
     }
   }
 
@@ -55,25 +64,32 @@ export function FileList({ files }: { files: FileRow[] }) {
 
   return (
     <ul className="flex flex-col gap-2">
-      {files.map((file) => (
-        <li key={file.id} className="flex flex-wrap items-center gap-3 rounded border p-3 text-sm">
-          <span className="font-medium">{file.filename}</span>
-          {file.size_label && <span className="opacity-70">{file.size_label}</span>}
-          {file.note && <span className="opacity-70">{file.note}</span>}
-          <button
-            onClick={() => download(file)}
-            disabled={!file.hasOriginal || busyId === file.id}
-            className="ml-auto rounded border px-3 py-1 disabled:opacity-50"
-          >
-            {file.hasOriginal ? t("download") : t("noOriginal")}
-          </button>
-          {errors[file.id] && (
-            <p role="alert" className="w-full text-red-600">
-              {errors[file.id]}
-            </p>
-          )}
-        </li>
-      ))}
+      {files.map((file) => {
+        const busy = busyIds.includes(file.id);
+        return (
+          <li key={file.id} className="flex flex-wrap items-center gap-3 rounded border p-3 text-sm">
+            <span className="font-medium">{file.filename}</span>
+            {file.size_label && <span className="opacity-70">{file.size_label}</span>}
+            {file.note && <span className="opacity-70">{file.note}</span>}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => download(file)}
+              disabled={!file.hasOriginal || busy}
+              aria-busy={busy}
+              className="ml-auto"
+            >
+              {busy && <Spinner aria-hidden />}
+              {busy ? t("preparing") : file.hasOriginal ? t("download") : t("noOriginal")}
+            </Button>
+            {errors[file.id] && (
+              <p role="alert" className="w-full text-red-600">
+                {errors[file.id]}
+              </p>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

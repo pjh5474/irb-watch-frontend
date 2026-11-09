@@ -6,7 +6,14 @@
     "password": "비밀번호",
     "submit": "로그인",
     "failed": "이메일 또는 비밀번호가 올바르지 않습니다.",
-    "sessionEnded": "세션이 종료되었습니다. 다시 로그인해 주세요."
+    "sessionEnded": "세션이 종료되었습니다. 다시 로그인해 주세요.",
+    "signingIn": "로그인 중..."
+  },
+  "status": {
+    "checking": "서버 확인 중",
+    "online": "서버 연결됨",
+    "offline": "서버에 연결할 수 없음",
+    "recheck": "클릭하면 서버를 다시 확인합니다"
   },
   "nav": {
     "feed": "변경 내역",
@@ -31,8 +38,10 @@
     "noFiles": "첨부 파일이 없습니다.",
     "textUnavailable": "텍스트를 읽을 수 없는 파일",
     "download": "다운로드",
+    "preparing": "준비 중...",
     "noOriginal": "원본 없음",
     "downloadError": {
+      "unreachable": "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
       "notFound": "파일을 찾을 수 없습니다.",
       "limit": "오늘의 다운로드 한도를 초과했습니다.",
       "unavailable": "지금은 다운로드할 수 없습니다.",
@@ -40,11 +49,14 @@
     },
     "wholeSummary": "문서 전체 요약",
     "summarize": "AI 요약 만들기",
+    "summarizing": "요약 중...",
+    "summarizingHint": "최대 1분 정도 걸릴 수 있습니다. 잠시만 기다려 주세요.",
     "summaryBlocked": {
       "limit": "오늘의 요약 한도를 초과했습니다. 내일 다시 시도해 주세요.",
       "unavailable": "AI 요약을 사용할 수 없습니다."
     },
     "summaryError": {
+      "unreachable": "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
       "notFound": "이 문서를 요약할 수 없습니다.",
       "generic": "요약에 실패했습니다."
     }

@@ -6,7 +6,14 @@
     "password": "Password",
     "submit": "Sign in",
     "failed": "Email or password is incorrect.",
-    "sessionEnded": "Your session ended. Please sign in again."
+    "sessionEnded": "Your session ended. Please sign in again.",
+    "signingIn": "Signing in..."
+  },
+  "status": {
+    "checking": "Checking server",
+    "online": "Server online",
+    "offline": "Server not reachable",
+    "recheck": "Click to check the server again"
   },
   "nav": {
     "feed": "Changes",
@@ -31,8 +38,10 @@
     "noFiles": "No attached files.",
     "textUnavailable": "Text could not be read from this file",
     "download": "Download",
+    "preparing": "Preparing...",
     "noOriginal": "No original stored",
     "downloadError": {
+      "unreachable": "Cannot reach the server. Try again in a moment.",
       "notFound": "File not found.",
       "limit": "You have reached today's download limit.",
       "unavailable": "Downloads are unavailable right now.",
@@ -40,11 +49,14 @@
     },
     "wholeSummary": "Whole-document summary",
     "summarize": "Create AI summary",
+    "summarizing": "Summarizing...",
+    "summarizingHint": "This can take up to a minute. Please wait.",
     "summaryBlocked": {
       "limit": "You have reached today's summary limit. Try again tomorrow.",
       "unavailable": "AI summaries are unavailable."
     },
     "summaryError": {
+      "unreachable": "Cannot reach the server. Try again in a moment.",
       "notFound": "This document cannot be summarized.",
       "generic": "Summary failed."
     }

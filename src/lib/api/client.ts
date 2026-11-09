@@ -1,3 +1,4 @@
+import { reportReachable, reportUnreachable } from "@/lib/api/status";
 import { createClient } from "@/lib/supabase/client";
 
 export class ApiError extends Error {
@@ -17,14 +18,23 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
-  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init.headers,
+      },
+    });
+  } catch {
+    // No HTTP answer at all: server down, network lost, or the browser blocked the call
+    // (for example CORS). Status 0 lets screens say "cannot reach the server".
+    reportUnreachable();
+    throw new ApiError(0, "cannot reach the server");
+  }
+  reportReachable();
 
   if (response.status === 401 || response.status === 403) {
     await supabase.auth.signOut();

@@ -1,5 +1,8 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
+import { Suspense } from "react";
 import { LocaleSwitch, SignOutButton } from "@/components/header-controls";
+import { NavProgress } from "@/components/nav-progress";
+import { ServerStatus } from "@/components/server-status";
 import { Link, redirect } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -37,9 +40,13 @@ export default async function AppLayout({
           {/* Admin screens are plan step 8; the link stays hidden until they exist. */}
           {isAdmin && false && <Link href="/admin">{t("admin")}</Link>}
         </nav>
+        <ServerStatus />
         <LocaleSwitch />
         <SignOutButton />
       </header>
+      <Suspense fallback={null}>
+        <NavProgress />
+      </Suspense>
       {children}
     </>
   );

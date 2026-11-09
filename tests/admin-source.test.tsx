@@ -16,6 +16,8 @@ const api = vi.hoisted(() => ({
   members: [] as unknown[],
   saveError: null as unknown,
   addError: null as unknown,
+  loginsError: null as unknown,
+  gate: Promise.resolve() as Promise<void>,
 }));
 
 vi.mock("@/i18n/navigation", async () => {
@@ -40,7 +42,11 @@ vi.mock("@/lib/api/admin", async () => {
         api.calls.push(["scanSource", ...a]);
         return { status: "started" };
       },
-      logins: async () => api.logins,
+      logins: async () => {
+        await api.gate;
+        if (api.loginsError) throw api.loginsError;
+        return api.logins;
+      },
       saveLogin: async (...a: unknown[]) => {
         api.calls.push(["saveLogin", ...a]);
         if (api.saveError) throw api.saveError;
@@ -48,6 +54,7 @@ vi.mock("@/lib/api/admin", async () => {
       },
       deleteLogin: async (...a: unknown[]) => {
         api.calls.push(["deleteLogin", ...a]);
+        api.logins = [];
       },
       members: async () => api.members,
       addMember: async (...a: unknown[]) => {
@@ -100,8 +107,49 @@ beforeEach(() => {
   api.members = [];
   api.saveError = null;
   api.addError = null;
+  api.loginsError = null;
+  api.gate = Promise.resolve();
 });
 afterEach(cleanup);
+
+describe("stored login sign", () => {
+  it("shows a green sign next to the name when the login is stored", async () => {
+    api.logins = [{ owner_label: "study-1", site: "snuh-2605277031", updated_at: "2026-11-09T01:00:00+00:00" }];
+    show();
+    expect(await screen.findByText("Login saved")).toBeTruthy();
+    expect(screen.queryByText("No login saved")).toBeNull();
+  });
+
+  it("shows a warning sign when no login is stored", async () => {
+    show();
+    expect(await screen.findByText("No login saved")).toBeTruthy();
+  });
+
+  it("changes to the green sign once a login is saved", async () => {
+    show();
+    await screen.findByText("No login saved");
+    api.logins = [{ owner_label: "study-1", site: "snuh-2605277031", updated_at: "2026-11-09T01:00:00+00:00" }];
+    fireEvent.change(screen.getByLabelText("Hospital login ID"), { target: { value: "id" } });
+    fireEvent.change(screen.getByLabelText("Hospital password"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save login" }));
+    expect(await screen.findByText("Login saved")).toBeTruthy();
+    expect(screen.queryByText("No login saved")).toBeNull();
+  });
+
+  it("shows no login sign for a public source", async () => {
+    api.source = { ...STUDY, login_user: null, requires_login: false };
+    show();
+    await screen.findByText("Public");
+    expect(screen.queryByText("Login saved")).toBeNull();
+    expect(screen.queryByText("No login saved")).toBeNull();
+  });
+
+  it("says unknown when the logins cannot be read", async () => {
+    api.loginsError = new ApiError(409, "needs CREDENTIAL_STORE=database");
+    show();
+    expect(await screen.findByText("Login status unknown")).toBeTruthy();
+  });
+});
 
 describe("study account", () => {
   it("saves the login under the label and the board's site, then clears the password", async () => {
@@ -150,6 +198,96 @@ describe("study account", () => {
     expect(called("deleteLogin")).toHaveLength(0); // not yet
     fireEvent.click(screen.getByRole("button", { name: "Yes" }));
     await waitFor(() => expect(called("deleteLogin")).toEqual([["deleteLogin", "study-1", "snuh-2605277031"]]));
+  });
+});
+
+describe("locked login form", () => {
+  const STORED = [{ owner_label: "study-1", site: "snuh-2605277031", updated_at: "2026-11-09T01:00:00+00:00" }];
+  const idField = () => screen.getByLabelText("Hospital login ID") as HTMLInputElement;
+  const pwField = () => screen.getByLabelText("Hospital password") as HTMLInputElement;
+
+  it("locks both fields, masks them and offers Change login when a login is stored", async () => {
+    api.logins = STORED;
+    show();
+    await screen.findByText(/A login is stored/);
+    expect(idField().disabled).toBe(true);
+    expect(pwField().disabled).toBe(true);
+    expect(idField().placeholder).toBe("••••••••");
+    expect(idField().value).toBe("");
+    expect(screen.getByText(/The stored login is locked/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Change login" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Replace login" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save login" })).toBeNull();
+  });
+
+  it("Change login opens the empty form, and Cancel locks it again without sending anything", async () => {
+    api.logins = STORED;
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Change login" }));
+    expect(idField().disabled).toBe(false);
+    expect(pwField().disabled).toBe(false);
+    fireEvent.change(idField(), { target: { value: "typed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(idField().disabled).toBe(true);
+    expect(idField().value).toBe(""); // what was typed is dropped
+    expect(called("saveLogin")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Change login" })).toBeTruthy();
+  });
+
+  it("replacing the login sends it once and locks the form again", async () => {
+    api.logins = STORED;
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Change login" }));
+    fireEvent.change(idField(), { target: { value: "new_id" } });
+    fireEvent.change(pwField(), { target: { value: "new_pw" } });
+    fireEvent.click(screen.getByRole("button", { name: "Replace login" }));
+    expect(await screen.findByText("Login saved.")).toBeTruthy();
+    expect(called("saveLogin")).toEqual([["saveLogin", "study-1", "snuh-2605277031", "new_id", "new_pw"]]);
+    await waitFor(() => expect(idField().disabled).toBe(true));
+    expect(pwField().value).toBe("");
+  });
+
+  it("a failed replace keeps the form open so nothing typed is lost", async () => {
+    api.logins = STORED;
+    api.saveError = new ApiError(409, "managing credentials over the API needs CREDENTIAL_STORE=database on this server");
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Change login" }));
+    fireEvent.change(idField(), { target: { value: "id" } });
+    fireEvent.change(pwField(), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: "Replace login" }));
+    expect(await screen.findByText(/needs CREDENTIAL_STORE=database/)).toBeTruthy();
+    expect(idField().disabled).toBe(false);
+    expect(idField().value).toBe("id");
+  });
+
+  it("an empty form (no login stored) is open from the start", async () => {
+    show();
+    await screen.findByText(/No login is stored yet/);
+    expect(idField().disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Change login" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Save login" })).toBeTruthy();
+  });
+
+  it("after the stored login is deleted the form opens", async () => {
+    api.logins = STORED;
+    show();
+    await screen.findByText(/A login is stored/);
+    fireEvent.click(screen.getByRole("button", { name: "Delete stored login" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+    expect(await screen.findByText(/No login is stored yet/)).toBeTruthy();
+    expect(idField().disabled).toBe(false);
+  });
+
+  it("stays shut while it is still unknown whether a login exists", async () => {
+    let open: () => void = () => {};
+    api.gate = new Promise<void>((resolve) => (open = resolve));
+    show();
+    await screen.findByText("Study 1");
+    expect(idField().disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Save login" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => open());
+    await screen.findByText(/No login is stored yet/);
+    expect(idField().disabled).toBe(false);
   });
 });
 

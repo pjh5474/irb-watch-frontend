@@ -3,8 +3,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
+import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
 import { HealthLight, sourcesNeedingAttention } from "@/components/admin/health-light";
+import { LoginBadge, loginStateOf, useStoredLogins } from "@/components/admin/login-badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
@@ -13,14 +15,8 @@ import { useSingleFlight } from "@/lib/use-single-flight";
 
 export const SOURCES_KEY = ["admin", "sources"] as const;
 
-export function Badge({ children, tone = "plain" }: { children: React.ReactNode; tone?: "plain" | "warn" | "good" }) {
-  const tones = {
-    plain: "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200",
-    warn: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100",
-    good: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-100",
-  };
-  return <span className={`rounded px-2 py-0.5 text-xs ${tones[tone]}`}>{children}</span>;
-}
+// Kept here too, so existing imports of Badge from this file keep working.
+export { Badge };
 
 export function AdminSources() {
   const t = useTranslations("admin");
@@ -38,6 +34,8 @@ export function AdminSources() {
     queryFn: adminApi.sources,
     refetchInterval: (q) => (q.state.data?.some((s) => s.scan_in_progress) ? 4000 : false),
   });
+
+  const logins = useStoredLogins(query.data);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
   const needAttention = query.data ? sourcesNeedingAttention(query.data) : 0;
@@ -173,6 +171,7 @@ export function AdminSources() {
                 {source.name}
               </Link>
               {source.requires_login ? <Badge tone="warn">{t("membersOnly")}</Badge> : <Badge>{t("public")}</Badge>}
+              <LoginBadge state={loginStateOf(source, logins)} error={logins.error} />
               <Badge tone={source.ai_enabled ? "good" : "plain"}>{source.ai_enabled ? t("aiOn") : t("aiOff")}</Badge>
               {!source.is_active && <Badge>{t("inactive")}</Badge>}
               {source.scan_in_progress && (

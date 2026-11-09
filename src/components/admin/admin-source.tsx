@@ -1,11 +1,15 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Building2, KeyRound, Lock, Pencil, Sparkles, Users } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
-import { Badge, SOURCES_KEY } from "@/components/admin/admin-sources";
+import { SOURCES_KEY } from "@/components/admin/admin-sources";
+import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
 import { HealthLight } from "@/components/admin/health-light";
+import { LOGINS_KEY, LoginBadge, loginStateOf, useStoredLogins } from "@/components/admin/login-badge";
+import { Section } from "@/components/admin/section";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
@@ -13,6 +17,11 @@ import { adminApi, loginSite, type AdminSource } from "@/lib/api/admin";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 type Message = { kind: "ok" | "error"; text: string } | null;
+
+// Locked fields show dots instead of the (never readable) stored value, and look inactive.
+const MASK = "••••••••";
+const fieldClass =
+  "rounded border px-3 py-2 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-400";
 
 function Note({ message }: { message: Message }) {
   if (!message) return null;
@@ -71,6 +80,7 @@ function Settings({ source }: { source: AdminSource }) {
   const format = useFormatter();
   const refresh = useRefreshSources();
   const flight = useSingleFlight();
+  const logins = useStoredLogins([source]);
   const [name, setName] = useState(source.name);
   const [message, setMessage] = useState<Message>(null);
 
@@ -88,12 +98,19 @@ function Settings({ source }: { source: AdminSource }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-semibold">{source.name}</h1>
-        {source.requires_login ? <Badge tone="warn">{t("membersOnly")}</Badge> : <Badge>{t("public")}</Badge>}
-        {!source.is_active && <Badge>{t("inactive")}</Badge>}
-      </div>
+    <Section
+      icon={Building2}
+      accent="slate"
+      level={1}
+      title={source.name}
+      aside={
+        <>
+          {source.requires_login ? <Badge tone="warn">{t("membersOnly")}</Badge> : <Badge>{t("public")}</Badge>}
+          <LoginBadge state={loginStateOf(source, logins)} error={logins.error} />
+          {!source.is_active && <Badge>{t("inactive")}</Badge>}
+        </>
+      }
+    >
       <HealthLight source={source} />
       <p className="break-all text-xs opacity-70">{source.url}</p>
       <p className="text-xs opacity-70">
@@ -154,7 +171,7 @@ function Settings({ source }: { source: AdminSource }) {
         </Button>
       </div>
       <Note message={message} />
-    </section>
+    </Section>
   );
 }
 
@@ -182,11 +199,12 @@ function AiSwitch({ source }: { source: AdminSource }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="font-medium">{t("aiTitle")}</h2>
-        <Badge tone={source.ai_enabled ? "good" : "plain"}>{source.ai_enabled ? t("aiOn") : t("aiOff")}</Badge>
-      </div>
+    <Section
+      icon={Sparkles}
+      accent="violet"
+      title={t("aiTitle")}
+      aside={<Badge tone={source.ai_enabled ? "good" : "plain"}>{source.ai_enabled ? t("aiOn") : t("aiOff")}</Badge>}
+    >
       <p className="text-sm opacity-80">{t("aiDescription")}</p>
       {source.ai_enabled ? (
         <div>
@@ -212,7 +230,7 @@ function AiSwitch({ source }: { source: AdminSource }) {
         </div>
       )}
       <Note message={message} />
-    </section>
+    </Section>
   );
 }
 
@@ -226,13 +244,26 @@ function Account({ source }: { source: AdminSource }) {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState<Message>(null);
 
   const label = source.login_user ?? "";
   const site = loginSite(source.url);
-  const logins = useQuery({ queryKey: ["admin", "logins"], queryFn: adminApi.logins });
+  const logins = useStoredLogins([source]);
   const stored = logins.data?.find((l) => l.owner_label === label && l.site === site);
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin", "logins"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: LOGINS_KEY });
+  // A stored login is locked until "Change login" is clicked, so it cannot be replaced by a stray
+  // keystroke. While the list is still loading the form stays shut too: it is not yet known
+  // whether a login exists.
+  const locked = Boolean(stored) && !editing;
+  const waiting = Boolean(site) && logins.isLoading;
+  const fieldsOff = locked || waiting;
+
+  function cancelChange() {
+    setEditing(false);
+    setLoginId("");
+    setPassword("");
+  }
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -242,9 +273,11 @@ function Account({ source }: { source: AdminSource }) {
       try {
         await adminApi.saveLogin(label, site, loginId, password);
         setMessage({ kind: "ok", text: t("loginSaved") });
-        // The password is cleared as soon as it has been sent; it is never shown again.
+        // The password is cleared as soon as it has been sent; it is never shown again. The form
+        // locks again because a login is now stored.
         setLoginId("");
         setPassword("");
+        setEditing(false);
       } catch (e) {
         setMessage({ kind: "error", text: adminErrorText(e, t) });
       }
@@ -260,6 +293,7 @@ function Account({ source }: { source: AdminSource }) {
       try {
         await adminApi.deleteLogin(label, site);
         setMessage({ kind: "ok", text: t("loginDeleted") });
+        cancelChange();
       } catch (e) {
         setMessage({ kind: "error", text: adminErrorText(e, t) });
       }
@@ -268,8 +302,7 @@ function Account({ source }: { source: AdminSource }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border p-4">
-      <h2 className="font-medium">{t("accountTitle")}</h2>
+    <Section icon={KeyRound} accent="amber" title={t("accountTitle")}>
       <p className="text-sm opacity-80">{t("accountIntro", { label })}</p>
       {!site && <p className="text-sm text-red-600">{t("noBoardKey")}</p>}
       {logins.isError && (
@@ -293,9 +326,11 @@ function Account({ source }: { source: AdminSource }) {
         <label className="flex flex-col gap-1 text-sm">
           {t("loginId")}
           <input
-            className="rounded border px-3 py-2"
+            className={fieldClass}
             value={loginId}
             onChange={(e) => setLoginId(e.target.value)}
+            placeholder={locked ? MASK : undefined}
+            disabled={fieldsOff}
             autoComplete="off"
             required
           />
@@ -303,20 +338,43 @@ function Account({ source }: { source: AdminSource }) {
         <label className="flex flex-col gap-1 text-sm">
           {t("password")}
           <input
-            className="rounded border px-3 py-2"
+            className={fieldClass}
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            placeholder={locked ? MASK : undefined}
+            disabled={fieldsOff}
             autoComplete="new-password"
             required
           />
         </label>
-        <p className="text-xs opacity-70">{t("passwordNote")}</p>
+        {locked ? (
+          <p className="flex items-center gap-1.5 text-xs opacity-80">
+            <Lock className="size-3.5 shrink-0" aria-hidden />
+            {t("loginLockedHint")}
+          </p>
+        ) : (
+          <p className="text-xs opacity-70">{t("passwordNote")}</p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" size="sm" disabled={flight.busy || !site} aria-busy={flight.busy}>
-            {flight.busy && <Spinner aria-hidden />}
-            {stored ? t("replaceLogin") : t("saveLogin")}
-          </Button>
+          {locked ? (
+            <Button type="button" size="sm" disabled={flight.busy} onClick={() => setEditing(true)}>
+              <Pencil className="size-3.5" aria-hidden />
+              {t("changeLogin")}
+            </Button>
+          ) : (
+            <>
+              <Button type="submit" size="sm" disabled={flight.busy || waiting || !site} aria-busy={flight.busy}>
+                {flight.busy && <Spinner aria-hidden />}
+                {stored ? t("replaceLogin") : t("saveLogin")}
+              </Button>
+              {editing && (
+                <Button type="button" size="sm" variant="outline" disabled={flight.busy} onClick={cancelChange}>
+                  {t("cancelChange")}
+                </Button>
+              )}
+            </>
+          )}
           {stored &&
             (confirmingDelete ? (
               <span className="animate-open flex flex-wrap items-center gap-2">
@@ -336,7 +394,7 @@ function Account({ source }: { source: AdminSource }) {
         </div>
       </form>
       <Note message={message} />
-    </section>
+    </Section>
   );
 }
 
@@ -364,8 +422,7 @@ function MakeMembersOnly({ source }: { source: AdminSource }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border p-4">
-      <h2 className="font-medium">{t("makeStudyTitle")}</h2>
+    <Section icon={Lock} accent="amber" title={t("makeStudyTitle")}>
       <p className="text-sm opacity-80">{t("makeStudyIntro")}</p>
       <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
         <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm">
@@ -384,7 +441,7 @@ function MakeMembersOnly({ source }: { source: AdminSource }) {
         </Button>
       </form>
       <Note message={message} />
-    </section>
+    </Section>
   );
 }
 
@@ -433,8 +490,7 @@ function Members({ source }: { source: AdminSource }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border p-4">
-      <h2 className="font-medium">{t("membersTitle")}</h2>
+    <Section icon={Users} accent="blue" title={t("membersTitle")}>
       <p className="text-sm opacity-80">{t("membersHint")}</p>
       {members.isLoading && <p className="text-sm opacity-70">{t("loading")}</p>}
       {members.isError && (
@@ -489,6 +545,6 @@ function Members({ source }: { source: AdminSource }) {
         </Button>
       </form>
       <Note message={message} />
-    </section>
+    </Section>
   );
 }

@@ -10,6 +10,9 @@ import { ApiError } from "../src/lib/api/client";
 // unhandled error even though the component handles it.
 const api = vi.hoisted(() => ({
   calls: [] as string[],
+  sources: [] as unknown[],
+  logins: [] as unknown[],
+  loginsError: null as unknown,
   testMail: async (): Promise<unknown> => ({ status: "sent" }),
   weekly: async (): Promise<unknown> => ({ status: "sent" }),
 }));
@@ -27,7 +30,12 @@ vi.mock("@/lib/api/admin", async () => {
   return {
     ...actual,
     adminApi: {
-      sources: async () => [],
+      sources: async () => api.sources,
+      logins: async () => {
+        api.calls.push("logins");
+        if (api.loginsError) throw api.loginsError;
+        return api.logins;
+      },
       scanAll: async () => ({ status: "started" }),
       scanSource: async () => ({ status: "started" }),
       createSource: async () => ({}),
@@ -54,12 +62,83 @@ function show() {
   );
 }
 
+const base = {
+  adapter: "snuh_hrpp",
+  needs_browser: false,
+  is_active: true,
+  created_at: "2026-11-09T00:00:00+00:00",
+  last_scan_at: null,
+  last_scan_status: null,
+  last_scan_error: null,
+  scan_in_progress: false,
+  scans_paused_reason: null,
+  ai_enabled: true,
+};
+const PUBLIC = { ...base, id: 1, name: "Public board", url: "https://hrpp.snuh.org/hrpp/bbs/list.do?key=1111111111", login_user: null, requires_login: false };
+const STUDY = { ...base, id: 5, name: "Study 1", url: "https://hrpp.snuh.org/hrpp/bbs/list.do?key=2605277031", login_user: "study-1", requires_login: true, ai_enabled: false };
+
 beforeEach(() => {
+  api.sources = [];
+  api.logins = [];
+  api.loginsError = null;
   api.calls.length = 0;
   api.testMail = async () => ({ status: "sent" });
   api.weekly = async () => ({ status: "sent" });
 });
 afterEach(cleanup);
+
+describe("stored login sign", () => {
+  it("shows a green sign for a study whose login is stored", async () => {
+    api.sources = [STUDY];
+    api.logins = [{ owner_label: "study-1", site: "snuh-2605277031", updated_at: "2026-11-09T01:00:00+00:00" }];
+    show();
+    expect(await screen.findByText("Login saved")).toBeTruthy();
+    expect(screen.queryByText("No login saved")).toBeNull();
+  });
+
+  it("shows a warning sign for a study with no stored login", async () => {
+    api.sources = [STUDY];
+    show();
+    expect(await screen.findByText("No login saved")).toBeTruthy();
+    expect(screen.queryByText("Login saved")).toBeNull();
+  });
+
+  it("does not count a login stored for another label or another board", async () => {
+    api.sources = [STUDY];
+    api.logins = [
+      { owner_label: "study-2", site: "snuh-2605277031", updated_at: null },
+      { owner_label: "study-1", site: "snuh-9999999999", updated_at: null },
+    ];
+    show();
+    expect(await screen.findByText("No login saved")).toBeTruthy();
+  });
+
+  it("shows no login sign for a public source and does not even ask for the logins", async () => {
+    api.sources = [PUBLIC];
+    show();
+    await screen.findByText("Public board");
+    expect(screen.queryByText("Login saved")).toBeNull();
+    expect(screen.queryByText("No login saved")).toBeNull();
+    expect(screen.queryByText("Login status unknown")).toBeNull();
+    expect(api.calls).not.toContain("logins");
+  });
+
+  it("says the status is unknown, never 'saved', when the logins cannot be read", async () => {
+    api.sources = [STUDY];
+    api.loginsError = new ApiError(409, "managing credentials over the API needs CREDENTIAL_STORE=database on this server");
+    show();
+    expect(await screen.findByText("Login status unknown")).toBeTruthy();
+    expect(screen.queryByText("Login saved")).toBeNull();
+    expect(screen.queryByText("No login saved")).toBeNull();
+  });
+
+  it("asks for the logins once for the whole list", async () => {
+    api.sources = [STUDY, { ...STUDY, id: 6, name: "Study 2", login_user: "study-2" }];
+    show();
+    await screen.findAllByText("No login saved");
+    expect(api.calls.filter((c) => c === "logins")).toHaveLength(1);
+  });
+});
 
 describe("weekly report preview button", () => {
   it("sends one preview and says it went to the admin's own address only", async () => {

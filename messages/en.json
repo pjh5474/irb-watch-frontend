@@ -155,9 +155,18 @@
     "noBoardKey": "This source address has no board key, so no login can be filed for it.",
     "loginStored": "A login is stored (saved {date}).",
     "loginMissing": "No login is stored yet. Scans of this source will fail until you save one.",
+    "loginBadge": {
+      "stored": "Login saved",
+      "missing": "No login saved",
+      "unknown": "Login status unknown",
+      "checking": "Checking login..."
+    },
     "loginId": "Hospital login ID",
     "password": "Hospital password",
     "passwordNote": "Sent once over HTTPS, stored encrypted, never shown again. Pass the password to the admin through a safe channel.",
+    "changeLogin": "Change login",
+    "cancelChange": "Cancel",
+    "loginLockedHint": "The stored login is locked. Click \"Change login\" to enter a new one.",
     "saveLogin": "Save login",
     "replaceLogin": "Replace login",
     "loginSaved": "Login saved.",

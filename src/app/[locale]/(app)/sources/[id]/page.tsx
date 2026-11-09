@@ -2,6 +2,7 @@ import { getFormatter, getTranslations, setRequestLocale } from "next-intl/serve
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
+import { RECENT_DAYS, recentCutoff, wantsOnlyNew } from "@/lib/recent";
 import { createClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 50;
@@ -11,14 +12,18 @@ export default async function SourcePage({
   searchParams,
 }: {
   params: Promise<{ locale: string; id: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; new?: string }>;
 }) {
   const { locale, id } = await params;
-  const { page: pageParam } = await searchParams;
+  const { page: pageParam, new: newParam } = await searchParams;
   setRequestLocale(locale);
   if (!/^\d+$/.test(id)) notFound();
   const sourceId = Number(id);
   const page = pageParam && /^[1-9]\d*$/.test(pageParam) ? Number(pageParam) : 1;
+  const onlyNew = wantsOnlyNew(newParam);
+  // Address of this list, keeping the "new only" choice when paging.
+  const listHref = (p: number) =>
+    `/sources/${sourceId}?${onlyNew ? "new=1&" : ""}page=${p}`;
 
   const t = await getTranslations("sources");
   const format = await getFormatter();
@@ -58,6 +63,14 @@ export default async function SourcePage({
         ← {t("back")}
       </Link>
       <h1 className="text-2xl font-semibold">{source.name}</h1>
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <span className="rounded bg-neutral-100 px-2 py-0.5 dark:bg-neutral-800">
+          {onlyNew ? t("viewingNew", { days: RECENT_DAYS }) : t("viewingAll")}
+        </span>
+        <Link href={onlyNew ? `/sources/${sourceId}` : `/sources/${sourceId}?new=1`} className="underline">
+          {onlyNew ? t("showAllDocuments") : t("showOnlyNew", { days: RECENT_DAYS })}
+        </Link>
+      </div>
       <div className="flex flex-wrap gap-3 text-sm opacity-70">
         {!source.is_active && <span>{t("inactive")}</span>}
         <span>
@@ -88,10 +101,13 @@ export default async function SourcePage({
   // Newest change first: latest_version_id only grows, so it orders documents by their most
   // recent stored version (a silent re-save of a file also counts). Paged in the database.
   const from = (page - 1) * PAGE_SIZE;
-  const { data: docs, count, error } = await supabase
+  let docsQuery = supabase
     .from("documents")
     .select("id, title, posted_on, status, latest_version_id", { count: "exact" })
-    .eq("source_id", sourceId)
+    .eq("source_id", sourceId);
+  // "New" = first seen by IRB Watch within RECENT_DAYS (see lib/recent.ts).
+  if (onlyNew) docsQuery = docsQuery.gte("first_seen_at", recentCutoff());
+  const { data: docs, count, error } = await docsQuery
     .order("latest_version_id", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false })
     .range(from, from + PAGE_SIZE - 1);
@@ -118,7 +134,11 @@ export default async function SourcePage({
           {t("documentsLoadError")}
         </p>
       )}
-      {!error && total === 0 && <p className="text-sm opacity-70">{t("noDocuments")}</p>}
+      {!error && total === 0 && (
+        <p className="text-sm opacity-70">
+          {onlyNew ? t("noNewDocuments", { days: RECENT_DAYS }) : t("noDocuments")}
+        </p>
+      )}
 
       <ul className="flex flex-col gap-3">
         {docs?.map((doc) => {
@@ -152,7 +172,7 @@ export default async function SourcePage({
       {!error && pages > 1 && (
         <nav aria-label={t("paging")} className="flex items-center justify-between text-sm">
           {page > 1 ? (
-            <Link href={`/sources/${sourceId}?page=${page - 1}`} className="underline">
+            <Link href={listHref(page - 1)} className="underline">
               ← {t("previous")}
             </Link>
           ) : (
@@ -160,7 +180,7 @@ export default async function SourcePage({
           )}
           <span className="opacity-70">{t("pageOf", { page, total: pages })}</span>
           {page < pages ? (
-            <Link href={`/sources/${sourceId}?page=${page + 1}`} className="underline">
+            <Link href={listHref(page + 1)} className="underline">
               {t("next")} →
             </Link>
           ) : (

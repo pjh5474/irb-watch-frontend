@@ -54,5 +54,6 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     }
     throw new ApiError(response.status, detail);
   }
+  if (response.status === 204) return undefined as T; // no body (for example a DELETE)
   return (await response.json()) as T;
 }

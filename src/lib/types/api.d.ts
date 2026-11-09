@@ -214,6 +214,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/documents/{document_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate Summary
+         * @description Write the whole-document summary of the current version again and replace the saved one.
+         *
+         *     The saved summary is shared by every user. Admins are exempt from the daily limit. If the
+         *     AI call fails the old summary stays. Logged as `summary.regenerated`.
+         */
+        post: operations["regenerate_summary_admin_documents__document_id__summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documents/{document_id}/summary": {
         parameters: {
             query?: never;
@@ -362,6 +385,15 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** RegenerateOut */
+        RegenerateOut: {
+            /** Summary */
+            summary: string;
+            /** Version No */
+            version_no: number;
+            /** Replaced */
+            replaced: boolean;
         };
         /** RoleIn */
         RoleIn: {
@@ -873,6 +905,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regenerate_summary_admin_documents__document_id__summary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegenerateOut"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -1,5 +1,6 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 import { MarkdownText } from "@/components/markdown-text";
+import { RecentDocuments } from "@/components/recent-documents";
 import { SourceFilter } from "@/components/source-filter";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -61,14 +62,20 @@ export default async function FeedPage({
         />
       </div>
 
+      <RecentDocuments
+        sources={(sources ?? []).filter((s) => sourceId === null || s.id === sourceId)}
+      />
+
+      <h2 className="mt-8 text-lg font-semibold">{t("changesTitle")}</h2>
+
       {error && (
-        <p role="alert" className="mt-6 text-sm text-red-600">
+        <p role="alert" className="mt-3 text-sm text-red-600">
           {t("loadError")}
         </p>
       )}
-      {!error && cards?.length === 0 && <p className="mt-6 text-sm opacity-70">{t("empty")}</p>}
+      {!error && cards?.length === 0 && <p className="mt-3 text-sm opacity-70">{t("empty")}</p>}
 
-      <ul className="mt-6 flex flex-col gap-3">
+      <ul className="mt-3 flex flex-col gap-3">
         {cards?.map((card) => {
           const payload = (card.payload ?? {}) as { version_no?: number };
           // event_type is "document.updated" etc.; message keys cannot contain dots.

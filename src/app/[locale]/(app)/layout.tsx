@@ -37,8 +37,7 @@ export default async function AppLayout({
         <nav className="flex flex-1 gap-4 text-sm">
           <Link href="/">{t("feed")}</Link>
           <Link href="/sources">{t("sources")}</Link>
-          {/* Admin screens are plan step 8; the link stays hidden until they exist. */}
-          {isAdmin && false && <Link href="/admin">{t("admin")}</Link>}
+          {isAdmin && <Link href="/admin">{t("admin")}</Link>}
         </nav>
         <ServerStatus />
         <LocaleSwitch />

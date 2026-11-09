@@ -17,6 +17,7 @@
   },
   "doc": {
     "back": "Changes",
+    "backToSource": "Source",
     "original": "View original",
     "removed": "Removed document",
     "needsReview": "Needs review",
@@ -47,6 +48,29 @@
       "notFound": "This document cannot be summarized.",
       "generic": "Summary failed."
     }
+  },
+  "sources": {
+    "title": "Sources",
+    "back": "Sources",
+    "empty": "No sources yet.",
+    "loadError": "Could not load sources.",
+    "documentsLoadError": "Could not load documents.",
+    "noDocuments": "No documents stored yet.",
+    "documentCount": "{n} documents",
+    "countUnknown": "Document count unavailable",
+    "locked": "Members only",
+    "lockedNote": "This is a members-only board. You need to confirm your hospital access to see its documents. Confirming access is not available yet.",
+    "inactive": "No longer scanned",
+    "lastScan": "Last checked: {date}",
+    "neverScanned": "Not checked yet",
+    "removed": "Removed",
+    "needsReview": "Needs review",
+    "posted": "Posted {date}",
+    "changed": "Changed {date}",
+    "paging": "Pages",
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "{page} / {total}"
   },
   "feed": {
     "title": "Changes",

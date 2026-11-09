@@ -5,6 +5,7 @@ import { FileList, type FileRow } from "@/components/file-list";
 import { SummaryPanel } from "@/components/summary-panel";
 import { Link } from "@/i18n/navigation";
 import { wordDiff } from "@/lib/diff";
+import { formatPageText } from "@/lib/page-text";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DocumentPage({
@@ -27,10 +28,17 @@ export default async function DocumentPage({
   // RLS decides what is readable: a document the user may not see simply comes back empty.
   const { data: document } = await supabase
     .from("documents")
-    .select("id, title, source_url, posted_on, status, review_reason")
+    .select("id, title, source_id, source_url, posted_on, status, review_reason")
     .eq("id", documentId)
     .maybeSingle();
   if (!document) notFound();
+
+  // For the "back to the board" link. Name only: the other source columns are not needed.
+  const { data: source } = await supabase
+    .from("sources")
+    .select("name")
+    .eq("id", document.source_id)
+    .maybeSingle();
 
   // "resaved" versions (bytes changed, text did not) are hidden from users.
   const { data: versions } = await supabase
@@ -50,7 +58,8 @@ export default async function DocumentPage({
     .from("document_versions")
     .select("id, body_text")
     .in("id", previous ? [selected.id, previous.id] : [selected.id]);
-  const body = (vid: number) => bodies?.find((b) => b.id === vid)?.body_text ?? "";
+  // Line breaks added for reading only; both sides of the diff are formatted alike.
+  const body = (vid: number) => formatPageText(bodies?.find((b) => b.id === vid)?.body_text ?? "");
 
   const { data: fileRows } = await supabase
     .from("document_version_files")
@@ -71,9 +80,14 @@ export default async function DocumentPage({
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <header className="flex flex-col gap-2">
-        <Link href="/" className="text-sm underline">
-          ← {t("back")}
-        </Link>
+        <div className="flex flex-wrap gap-4 text-sm">
+          <Link href="/" className="underline">
+            ← {t("back")}
+          </Link>
+          <Link href={`/sources/${document.source_id}`} className="underline">
+            ← {source?.name ?? t("backToSource")}
+          </Link>
+        </div>
         <h1 className="text-2xl font-semibold">{document.title}</h1>
         <div className="flex flex-wrap gap-3 text-sm opacity-70">
           {document.posted_on && <span>{document.posted_on}</span>}

@@ -17,6 +17,7 @@
   },
   "doc": {
     "back": "변경 내역",
+    "backToSource": "출처",
     "original": "원문 보기",
     "removed": "삭제된 문서",
     "needsReview": "확인 필요",
@@ -47,6 +48,29 @@
       "notFound": "이 문서를 요약할 수 없습니다.",
       "generic": "요약에 실패했습니다."
     }
+  },
+  "sources": {
+    "title": "출처",
+    "back": "출처",
+    "empty": "등록된 출처가 없습니다.",
+    "loadError": "출처를 불러오지 못했습니다.",
+    "documentsLoadError": "문서를 불러오지 못했습니다.",
+    "noDocuments": "저장된 문서가 없습니다.",
+    "documentCount": "문서 {n}개",
+    "countUnknown": "문서 수를 확인할 수 없음",
+    "locked": "회원 전용",
+    "lockedNote": "회원 전용 게시판입니다. 문서를 보려면 병원 계정으로 접근 권한을 확인해야 합니다. 접근 확인 기능은 아직 제공되지 않습니다.",
+    "inactive": "더 이상 확인하지 않음",
+    "lastScan": "마지막 확인: {date}",
+    "neverScanned": "아직 확인되지 않음",
+    "removed": "삭제됨",
+    "needsReview": "확인 필요",
+    "posted": "게시일 {date}",
+    "changed": "변경 {date}",
+    "paging": "페이지",
+    "previous": "이전",
+    "next": "다음",
+    "pageOf": "{page} / {total}"
   },
   "feed": {
     "title": "변경 내역",

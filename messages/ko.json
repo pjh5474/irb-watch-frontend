@@ -1,0 +1,69 @@
+{
+  "app": { "name": "IRB Watch" },
+  "login": {
+    "title": "로그인",
+    "email": "이메일",
+    "password": "비밀번호",
+    "submit": "로그인",
+    "failed": "이메일 또는 비밀번호가 올바르지 않습니다.",
+    "sessionEnded": "세션이 종료되었습니다. 다시 로그인해 주세요."
+  },
+  "nav": {
+    "feed": "변경 내역",
+    "sources": "출처",
+    "admin": "관리",
+    "signOut": "로그아웃",
+    "language": "English"
+  },
+  "doc": {
+    "back": "변경 내역",
+    "original": "원문 보기",
+    "removed": "삭제된 문서",
+    "needsReview": "확인 필요",
+    "versions": "버전",
+    "version": "버전 {n}",
+    "changeSummary": "변경 요약",
+    "changes": "변경 사항 (버전 {from} → {to})",
+    "text": "본문",
+    "diffTooLarge": "본문이 너무 길어 단어 단위 비교를 표시할 수 없습니다. 최신 본문을 표시합니다.",
+    "files": "첨부 파일",
+    "noFiles": "첨부 파일이 없습니다.",
+    "textUnavailable": "텍스트를 읽을 수 없는 파일",
+    "download": "다운로드",
+    "noOriginal": "원본 없음",
+    "downloadError": {
+      "notFound": "파일을 찾을 수 없습니다.",
+      "limit": "오늘의 다운로드 한도를 초과했습니다.",
+      "unavailable": "지금은 다운로드할 수 없습니다.",
+      "generic": "다운로드에 실패했습니다."
+    },
+    "wholeSummary": "문서 전체 요약",
+    "summarize": "AI 요약 만들기",
+    "summaryBlocked": {
+      "limit": "오늘의 요약 한도를 초과했습니다. 내일 다시 시도해 주세요.",
+      "unavailable": "AI 요약을 사용할 수 없습니다."
+    },
+    "summaryError": {
+      "notFound": "이 문서를 요약할 수 없습니다.",
+      "generic": "요약에 실패했습니다."
+    }
+  },
+  "feed": {
+    "title": "변경 내역",
+    "empty": "표시할 변경 내역이 없습니다.",
+    "allSources": "모든 출처",
+    "filterLabel": "출처",
+    "loadError": "변경 내역을 불러오지 못했습니다.",
+    "noSummary": "요약이 없습니다.",
+    "documentGone": "이 문서는 더 이상 열 수 없습니다.",
+    "version": "버전 {n}",
+    "event": {
+      "new": "새 문서",
+      "updated": "수정됨",
+      "removed": "삭제됨",
+      "reappeared": "다시 게시됨",
+      "needs_review": "확인 필요"
+    },
+    "priority": { "low": "낮음", "medium": "보통", "high": "높음" }
+  }
+}

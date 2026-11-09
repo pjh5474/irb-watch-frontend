@@ -1,0 +1,69 @@
+{
+  "app": { "name": "IRB Watch" },
+  "login": {
+    "title": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "failed": "Email or password is incorrect.",
+    "sessionEnded": "Your session ended. Please sign in again."
+  },
+  "nav": {
+    "feed": "Changes",
+    "sources": "Sources",
+    "admin": "Admin",
+    "signOut": "Sign out",
+    "language": "한국어"
+  },
+  "doc": {
+    "back": "Changes",
+    "original": "View original",
+    "removed": "Removed document",
+    "needsReview": "Needs review",
+    "versions": "Versions",
+    "version": "Version {n}",
+    "changeSummary": "Summary of the change",
+    "changes": "Changes (version {from} → {to})",
+    "text": "Text",
+    "diffTooLarge": "The text is too long for a word-level comparison. Showing the latest text instead.",
+    "files": "Attached files",
+    "noFiles": "No attached files.",
+    "textUnavailable": "Text could not be read from this file",
+    "download": "Download",
+    "noOriginal": "No original stored",
+    "downloadError": {
+      "notFound": "File not found.",
+      "limit": "You have reached today's download limit.",
+      "unavailable": "Downloads are unavailable right now.",
+      "generic": "Download failed."
+    },
+    "wholeSummary": "Whole-document summary",
+    "summarize": "Create AI summary",
+    "summaryBlocked": {
+      "limit": "You have reached today's summary limit. Try again tomorrow.",
+      "unavailable": "AI summaries are unavailable."
+    },
+    "summaryError": {
+      "notFound": "This document cannot be summarized.",
+      "generic": "Summary failed."
+    }
+  },
+  "feed": {
+    "title": "Changes",
+    "empty": "No changes to show.",
+    "allSources": "All sources",
+    "filterLabel": "Source",
+    "loadError": "Could not load changes.",
+    "noSummary": "No summary.",
+    "documentGone": "This document can no longer be opened.",
+    "version": "Version {n}",
+    "event": {
+      "new": "New document",
+      "updated": "Updated",
+      "removed": "Removed",
+      "reappeared": "Reappeared",
+      "needs_review": "Needs review"
+    },
+    "priority": { "low": "Low", "medium": "Medium", "high": "High" }
+  }
+}

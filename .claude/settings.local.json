@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(uv run *)",
+      "PowerShell(npx --yes supabase link --help)",
+      "PowerShell(npx --yes supabase link --project-ref jlkkoaugtovvaxrqxoyx; \"exit=$LASTEXITCODE\")",
+      "PowerShell(npx --yes supabase db query --help | Select-Object -First 30)",
+      "PowerShell(npx --yes supabase db push --remote --dry-run; \"exit=$LASTEXITCODE\")",
+      "PowerShell(uv *)",
+      "WebFetch(domain:developers.openai.com)",
+      "WebFetch(domain:docs.typesafe.ai)"
+    ]
+  },
+  "outputStyle": "Spartan"
+}

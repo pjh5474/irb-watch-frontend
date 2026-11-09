@@ -302,6 +302,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/mail/weekly-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Weekly Preview
+         * @description Send the weekly usage report for the last 7 days to YOUR OWN address only, so it can be
+         *     looked at before Monday. It never goes to the other admins and does not use up the week's
+         *     once-only claim, so Monday's real mail is not affected.
+         */
+        post: operations["send_weekly_preview_admin_mail_weekly_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documents/{document_id}/summary": {
         parameters: {
             query?: never;
@@ -1119,6 +1141,28 @@ export interface operations {
         };
     };
     send_test_mail_admin_mail_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    send_weekly_preview_admin_mail_weekly_preview_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -1,5 +1,6 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Suspense } from "react";
+import { AssistantPanel } from "@/components/assistant/assistant-panel";
 import { LocaleSwitch, SignOutButton } from "@/components/header-controls";
 import { NavProgress } from "@/components/nav-progress";
 import { ServerStatus } from "@/components/server-status";
@@ -48,6 +49,7 @@ export default async function AppLayout({
         <NavProgress />
       </Suspense>
       {children}
+      <AssistantPanel />
     </>
   );
 }

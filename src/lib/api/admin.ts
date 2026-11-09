@@ -47,6 +47,12 @@ export const adminApi = {
   sendTestMail: () => apiFetch<{ status: string }>("/admin/mail/test", { method: "POST" }),
   // The weekly usage report for the last 7 days, sent to the calling admin's own address only.
   sendWeeklyPreview: () => apiFetch<{ status: string }>("/admin/mail/weekly-preview", { method: "POST" }),
+  // Writes the whole-document summary again and replaces the saved one for everyone.
+  resummarize: (documentId: number) =>
+    apiFetch<{ summary: string; version_no: number; replaced: boolean }>(
+      `/admin/documents/${documentId}/summary`,
+      { method: "POST" },
+    ),
 
   members: (id: number) => apiFetch<SourceMember[]>(`/admin/sources/${id}/members`),
   addMember: (id: number, email: string) =>

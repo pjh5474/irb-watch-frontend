@@ -69,6 +69,62 @@
       "generic": "요약에 실패했습니다."
     }
   },
+  "assistant": {
+    "title": "어시스턴트",
+    "open": "어시스턴트에게 질문",
+    "close": "어시스턴트 닫기",
+    "history": "대화 목록",
+    "newChat": "새 대화",
+    "loading": "불러오는 중...",
+    "noChats": "아직 대화가 없습니다.",
+    "untitled": "새 대화",
+    "delete": "이 대화 삭제",
+    "yes": "예",
+    "no": "아니오",
+    "retention": "대화는 마지막 메시지 후 30일이 지나면 자동으로 삭제됩니다.",
+    "intro": "읽을 수 있는 문서에 대해 물어보세요. 무엇이 바뀌었는지, 문서에 무엇이 쓰여 있는지, 두 버전이 어떻게 다른지 알려 드립니다.",
+    "introNote": "본인이 읽을 수 있는 내용만 확인합니다. AI가 꺼진 출처는 사용할 수 없습니다. 답변에 오류가 있을 수 있으니 조치 전에 원문을 확인하세요.",
+    "thinking": "생각 중...",
+    "off": "어시스턴트를 사용할 수 없습니다.",
+    "placeholder": "질문을 입력하세요",
+    "send": "보내기",
+    "stop": "중지",
+    "usage": "최근 24시간 동안 {limit}개 중 {used}개 사용",
+    "aiNote": "AI는 실수할 수 있습니다.",
+    "aboutPage": "{kind} #{id}에 대해 질문",
+    "removeHint": "이 페이지 정보를 사용하지 않음",
+    "pageKind": { "source": "출처", "document": "문서" },
+    "stopped": "중지했습니다. 질문은 저장되었으니 다시 질문하면 답을 받을 수 있습니다.",
+    "errors": {
+      "unreachable": "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+      "generic": "문제가 발생했습니다.",
+      "cutOff": "답변이 끝나기 전에 중단되었습니다. 다시 질문해 주세요."
+    },
+    "tools": {
+      "list_sources": "출처를 확인하는 중...",
+      "list_documents": "출처의 문서를 찾는 중...",
+      "get_changes": "최근 변경을 확인하는 중...",
+      "get_document": "문서를 읽는 중...",
+      "get_document_text": "문서 본문을 읽는 중...",
+      "compare_versions": "버전을 비교하는 중...",
+      "propose_action": "제안을 준비하는 중...",
+      "other": "확인하는 중..."
+    },
+    "action": {
+      "proposed": "제안",
+      "scan_source": "출처 \"{name}\"을(를) 지금 수집",
+      "scan_all": "전체 출처를 지금 수집",
+      "resummarize": "\"{name}\" 요약을 다시 작성",
+      "test_mail": "내 이메일 주소로 테스트 메일 보내기",
+      "weekly_preview": "내 이메일 주소로 주간 현황 미리보기 보내기",
+      "resummarizeWarning": "저장된 요약이 모든 사용자에 대해 교체됩니다.",
+      "confirm": "확인",
+      "dismiss": "취소",
+      "running": "실행 중...",
+      "done": "완료했습니다.",
+      "dismissed": "취소했습니다."
+    }
+  },
   "pagination": {
     "paging": "페이지",
     "previous": "이전",
@@ -158,6 +214,18 @@
     "noBoardKey": "이 출처 주소에는 게시판 키가 없어 로그인을 저장할 수 없습니다.",
     "loginStored": "로그인이 저장되어 있습니다 ({date} 저장).",
     "loginMissing": "저장된 로그인이 없습니다. 저장하기 전까지 이 출처의 수집은 실패합니다.",
+    "tabs": { "sources": "출처", "assistant": "어시스턴트" },
+    "agent": {
+      "title": "어시스턴트 사용 한도",
+      "intro": "각 사용자가 24시간 동안 어시스턴트에게 보낼 수 있는 메시지 수입니다. 대화를 삭제해도 횟수는 초기화되지 않습니다. 0이면 해당 계정 유형은 어시스턴트를 사용할 수 없습니다.",
+      "userLimit": "일반 사용자",
+      "adminLimit": "관리자",
+      "range": "0에서 1000 사이의 정수.",
+      "save": "한도 저장",
+      "saved": "한도를 저장했습니다.",
+      "invalid": "각 한도는 0에서 1000 사이의 정수여야 합니다.",
+      "unchanged": "저장할 변경 사항이 없습니다."
+    },
     "loginBadge": {
       "stored": "로그인 저장됨",
       "missing": "로그인 없음",

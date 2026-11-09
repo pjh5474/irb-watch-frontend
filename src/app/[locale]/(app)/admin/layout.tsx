@@ -1,5 +1,6 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
+import { AdminTabs } from "@/components/admin/admin-tabs";
 import { getAccessState } from "@/lib/access";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,5 +28,10 @@ export default async function AdminLayout({
     );
   }
   if (!access.isAdmin) notFound();
-  return <>{children}</>;
+  return (
+    <>
+      <AdminTabs />
+      {children}
+    </>
+  );
 }

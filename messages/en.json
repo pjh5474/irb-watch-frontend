@@ -69,6 +69,62 @@
       "generic": "Summary failed."
     }
   },
+  "assistant": {
+    "title": "Assistant",
+    "open": "Ask the assistant",
+    "close": "Close the assistant",
+    "history": "Conversations",
+    "newChat": "New chat",
+    "loading": "Loading...",
+    "noChats": "No conversations yet.",
+    "untitled": "New conversation",
+    "delete": "Delete this conversation",
+    "yes": "Yes",
+    "no": "No",
+    "retention": "Conversations are deleted automatically 30 days after their last message.",
+    "intro": "Ask about the documents you can read: what changed, what a document says, or how two versions differ.",
+    "introNote": "It reads only what you may read. Sources with AI switched off are not available to it. Answers may contain mistakes; check the original before acting.",
+    "thinking": "Thinking...",
+    "off": "The assistant is not available.",
+    "placeholder": "Type a question",
+    "send": "Send",
+    "stop": "Stop",
+    "usage": "{used} of {limit} messages used in the last 24 hours",
+    "aiNote": "AI can make mistakes.",
+    "aboutPage": "Asking about {kind} #{id}",
+    "removeHint": "Do not use this page",
+    "pageKind": { "source": "source", "document": "document" },
+    "stopped": "Stopped. The question was saved; ask again to get an answer.",
+    "errors": {
+      "unreachable": "Cannot reach the server. Try again in a moment.",
+      "generic": "Something went wrong.",
+      "cutOff": "The answer ended before it was finished. Ask again."
+    },
+    "tools": {
+      "list_sources": "Checking the sources...",
+      "list_documents": "Looking through a source's documents...",
+      "get_changes": "Checking recent changes...",
+      "get_document": "Reading a document...",
+      "get_document_text": "Reading a document's text...",
+      "compare_versions": "Comparing versions...",
+      "propose_action": "Preparing a suggestion...",
+      "other": "Looking something up..."
+    },
+    "action": {
+      "proposed": "Suggested",
+      "scan_source": "Scan the source \"{name}\" now",
+      "scan_all": "Scan all sources now",
+      "resummarize": "Write the summary of \"{name}\" again",
+      "test_mail": "Send a test email to your own address",
+      "weekly_preview": "Send the weekly report preview to your own address",
+      "resummarizeWarning": "This replaces the saved summary for everyone.",
+      "confirm": "Confirm",
+      "dismiss": "Dismiss",
+      "running": "Running...",
+      "done": "Done.",
+      "dismissed": "Dismissed."
+    }
+  },
   "pagination": {
     "paging": "Pages",
     "previous": "Previous",
@@ -158,6 +214,18 @@
     "noBoardKey": "This source address has no board key, so no login can be filed for it.",
     "loginStored": "A login is stored (saved {date}).",
     "loginMissing": "No login is stored yet. Scans of this source will fail until you save one.",
+    "tabs": { "sources": "Sources", "assistant": "Assistant" },
+    "agent": {
+      "title": "Assistant limits",
+      "intro": "How many messages each person may send to the assistant in any 24 hours. A deleted chat does not reset the count. 0 switches the assistant off for that type of account.",
+      "userLimit": "Users",
+      "adminLimit": "Admins",
+      "range": "A whole number from 0 to 1000.",
+      "save": "Save limits",
+      "saved": "Limits saved.",
+      "invalid": "Each limit must be a whole number from 0 to 1000.",
+      "unchanged": "No change to save."
+    },
     "loginBadge": {
       "stored": "Login saved",
       "missing": "No login saved",

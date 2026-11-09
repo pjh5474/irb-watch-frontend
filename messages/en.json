@@ -48,7 +48,14 @@
       "generic": "Download failed."
     },
     "wholeSummary": "Whole-document summary",
+    "references": "Sources of this summary",
     "summarize": "Create AI summary",
+    "regenerate": "Re-summarize (admin)",
+    "regenerating": "Re-summarizing...",
+    "regenerateConfirm": "Replace the saved summary for everyone?",
+    "regenerateYes": "Replace",
+    "regenerateNo": "Cancel",
+    "aiNote": "Written by AI and may contain mistakes. Check the original document before acting.",
     "summarizing": "Summarizing...",
     "summarizingHint": "This can take up to a minute. Please wait.",
     "summaryBlocked": {

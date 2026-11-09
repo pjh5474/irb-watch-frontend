@@ -1,4 +1,5 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
+import { MarkdownText } from "@/components/markdown-text";
 import { SourceFilter } from "@/components/source-filter";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -105,7 +106,11 @@ export default async function FeedPage({
               {card.document_id !== null && !openableIds.has(card.document_id) && (
                 <p className="mt-1 text-xs opacity-60">{t("documentGone")}</p>
               )}
-              <p className="mt-1 text-sm opacity-80">{card.summary ?? t("noSummary")}</p>
+              {card.summary ? (
+                <MarkdownText className="mt-1 opacity-80">{card.summary}</MarkdownText>
+              ) : (
+                <p className="mt-1 text-sm opacity-80">{t("noSummary")}</p>
+              )}
             </li>
           );
         })}

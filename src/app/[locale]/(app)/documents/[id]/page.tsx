@@ -2,8 +2,10 @@ import { getFormatter, getTranslations, setRequestLocale } from "next-intl/serve
 import { notFound } from "next/navigation";
 import { DiffView } from "@/components/diff-view";
 import { FileList, type FileRow } from "@/components/file-list";
+import { MarkdownText } from "@/components/markdown-text";
 import { SummaryPanel } from "@/components/summary-panel";
 import { Link } from "@/i18n/navigation";
+import { getAccessState } from "@/lib/access";
 import { wordDiff } from "@/lib/diff";
 import { formatPageText } from "@/lib/page-text";
 import { createClient } from "@/lib/supabase/server";
@@ -39,6 +41,9 @@ export default async function DocumentPage({
     .select("name")
     .eq("id", document.source_id)
     .maybeSingle();
+
+  // UI hint only (shows the admin's re-summarize button); the server re-checks the role.
+  const access = await getAccessState(supabase);
 
   // "resaved" versions (bytes changed, text did not) are hidden from users.
   const { data: versions } = await supabase
@@ -126,7 +131,9 @@ export default async function DocumentPage({
       {selected.summary && (
         <section>
           <h2 className="mb-2 font-medium">{t("changeSummary")}</h2>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{selected.summary}</p>
+          <div className="rounded border bg-muted/40 p-3">
+            <MarkdownText>{selected.summary}</MarkdownText>
+          </div>
         </section>
       )}
 
@@ -155,7 +162,30 @@ export default async function DocumentPage({
 
       <section>
         <h2 className="mb-2 font-medium">{t("wholeSummary")}</h2>
-        <SummaryPanel key={selected.id} documentId={documentId} cachedSummary={selected.document_summary} />
+        <SummaryPanel
+          key={selected.id}
+          documentId={documentId}
+          cachedSummary={selected.document_summary}
+          canRegenerate={Boolean(access?.isAdmin) && index === 0}
+        />
+        {/* Built from our own data, never from the AI's text: the post and the attachments
+            the summary is based on. */}
+        <aside className="mt-4 text-sm">
+          <h3 className="font-medium">{t("references")}</h3>
+          <ul className="mt-1 list-disc space-y-1 pl-5">
+            <li>
+              <a href={document.source_url} target="_blank" rel="noopener noreferrer" className="underline">
+                {t("original")}
+              </a>
+              <span className="opacity-70"> · {document.title}</span>
+            </li>
+            {files.map((f) => (
+              <li key={f.id} className="opacity-80">
+                {f.filename}
+              </li>
+            ))}
+          </ul>
+        </aside>
       </section>
     </main>
   );

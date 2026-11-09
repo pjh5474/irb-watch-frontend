@@ -48,7 +48,14 @@
       "generic": "다운로드에 실패했습니다."
     },
     "wholeSummary": "문서 전체 요약",
+    "references": "요약의 출처",
     "summarize": "AI 요약 만들기",
+    "regenerate": "다시 요약 (관리자)",
+    "regenerating": "다시 요약하는 중...",
+    "regenerateConfirm": "저장된 요약을 모든 사용자에게서 교체할까요?",
+    "regenerateYes": "교체",
+    "regenerateNo": "취소",
+    "aiNote": "AI가 작성한 요약이며 오류가 있을 수 있습니다. 조치하기 전에 원문을 확인해 주세요.",
     "summarizing": "요약 중...",
     "summarizingHint": "최대 1분 정도 걸릴 수 있습니다. 잠시만 기다려 주세요.",
     "summaryBlocked": {

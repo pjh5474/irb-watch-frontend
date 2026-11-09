@@ -237,6 +237,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/sources/{source_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Members
+         * @description Users an admin assigned to this members-only source.
+         */
+        get: operations["list_members_admin_sources__source_id__members_get"];
+        /**
+         * Add Member
+         * @description Let the user with this email read the source. Idempotent. 422 for a public source,
+         *     404 for an unknown or deleted user. Logged first; if the log fails nothing changes.
+         */
+        put: operations["add_member_admin_sources__source_id__members_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/sources/{source_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Member */
+        delete: operations["remove_member_admin_sources__source_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/mail/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Test Mail
+         * @description Send a short test mail to YOUR OWN address, to check the key, the sender domain and DNS.
+         *
+         *     409 when mail is not set up on this server (RESEND_API_KEY, MAIL_FROM and APP_URL).
+         *     502 with the mail service's reason when the send fails (for example an unverified domain).
+         */
+        post: operations["send_test_mail_admin_mail_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documents/{document_id}/summary": {
         parameters: {
             query?: never;
@@ -257,29 +322,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/sources/{source_id}/access": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Prove Access
-         * @description Prove with your OWN hospital login that you may read a members-only source.
-         *
-         *     The password is used once, in memory, and never stored or logged. Access then lasts
-         *     30 days.
-         */
-        post: operations["prove_access_sources__source_id__access_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/files/{file_id}/download-url": {
         parameters: {
             query?: never;
@@ -294,10 +336,32 @@ export interface paths {
          * @description Short-lived link to the original of one stored file (any version).
          *
          *     `file_id` is `document_version_files.id`. Needs the same access as reading the
-         *     document: any signed-in user (plus a valid proof of access for members-only sources) and admins.
+         *     document: any signed-in user for public sources, assigned members for members-only
+         *     sources (studies), and admins.
          *     Each request is logged and counted toward a daily cap.
          */
         post: operations["create_download_link_files__file_id__download_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Link
+         * @description Is this link valid? Changes nothing.
+         */
+        get: operations["check_link_unsubscribe_get"];
+        put?: never;
+        /** Unsubscribe */
+        post: operations["unsubscribe_unsubscribe_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -308,20 +372,10 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AccessIn */
-        AccessIn: {
-            /** Login Id */
-            login_id: string;
-            /**
-             * Password
-             * Format: password
-             */
-            password: string;
-        };
-        /** AccessOut */
-        AccessOut: {
-            /** Expires At */
-            expires_at: string;
+        /** AddMemberIn */
+        AddMemberIn: {
+            /** Email */
+            email: string;
         };
         /** CreateSourceIn */
         CreateSourceIn: {
@@ -331,6 +385,8 @@ export interface components {
             url: string;
             /** Login User */
             login_user?: string | null;
+            /** Ai Enabled */
+            ai_enabled?: boolean | null;
         };
         /** CreateUserIn */
         CreateUserIn: {
@@ -386,6 +442,17 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** MemberOut */
+        MemberOut: {
+            /** User Id */
+            user_id: string;
+            /** Email */
+            email: string | null;
+            /** Display Name */
+            display_name: string | null;
+            /** Added At */
+            added_at: string | null;
+        };
         /** RegenerateOut */
         RegenerateOut: {
             /** Summary */
@@ -436,6 +503,11 @@ export interface components {
             requires_login: boolean;
             /** Scans Paused Reason */
             scans_paused_reason?: string | null;
+            /**
+             * Ai Enabled
+             * @default true
+             */
+            ai_enabled: boolean;
         };
         /** SummaryOut */
         SummaryOut: {
@@ -454,6 +526,8 @@ export interface components {
             is_active?: boolean | null;
             /** Login User */
             login_user?: string | null;
+            /** Ai Enabled */
+            ai_enabled?: boolean | null;
         };
         /** UserList */
         UserList: {
@@ -948,6 +1022,124 @@ export interface operations {
             };
         };
     };
+    list_members_admin_sources__source_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_member_admin_sources__source_id__members_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMemberIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_member_admin_sources__source_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_test_mail_admin_mail_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     summarize_document_documents__document_id__summary_post: {
         parameters: {
             query?: never;
@@ -979,41 +1171,6 @@ export interface operations {
             };
         };
     };
-    prove_access_sources__source_id__access_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                source_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AccessIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccessOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     create_download_link_files__file_id__download_url_post: {
         parameters: {
             query?: never;
@@ -1032,6 +1189,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DownloadLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_link_unsubscribe_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsubscribe_unsubscribe_post: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

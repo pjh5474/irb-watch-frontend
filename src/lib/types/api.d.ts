@@ -225,7 +225,7 @@ export interface paths {
         put?: never;
         /**
          * Summarize Document
-         * @description Summary of the whole current document. For subscribers of its source and admins.
+         * @description Summary of the whole current document. For users who may read its source, and admins.
          */
         post: operations["summarize_document_documents__document_id__summary_post"];
         delete?: never;
@@ -248,7 +248,7 @@ export interface paths {
          * @description Prove with your OWN hospital login that you may read a members-only source.
          *
          *     The password is used once, in memory, and never stored or logged. Access then lasts
-         *     30 days. Follow the source separately (subscribe) to see it.
+         *     30 days.
          */
         post: operations["prove_access_sources__source_id__access_post"];
         delete?: never;
@@ -271,7 +271,7 @@ export interface paths {
          * @description Short-lived link to the original of one stored file (any version).
          *
          *     `file_id` is `document_version_files.id`. Needs the same access as reading the
-         *     document: followers (plus a valid proof of access for members-only sources) and admins.
+         *     document: any signed-in user (plus a valid proof of access for members-only sources) and admins.
          *     Each request is logged and counted toward a daily cap.
          */
         post: operations["create_download_link_files__file_id__download_url_post"];

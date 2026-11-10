@@ -352,6 +352,7 @@
     "addTitle": "Add a source",
     "loginLabel": "Study account label (optional)",
     "loginLabelHint": "Letters, digits, '.', '_' and '-'. With a label the source is members-only and AI summaries start switched off.",
+    "urlHint": "A SNUH board link, or a hospital's R-BAY address with ?board=REGLA (관련규정), FORM_BOX (양식함) or NOTI (공지). An R-BAY board needs a login label; its password is stored under site \"rbay\".",
     "add": "Add source",
     "sourceAdded": "Source added.",
     "aiTitle": "AI summaries",

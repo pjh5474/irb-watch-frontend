@@ -243,6 +243,7 @@ export function AdminSources() {
             placeholder="https://hrpp.snuh.org/hrpp/bbs/list.do?key=2605277031"
             required
           />
+          <span className="text-xs opacity-70">{t("urlHint")}</span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           {t("loginLabel")}

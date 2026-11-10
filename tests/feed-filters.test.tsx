@@ -107,10 +107,21 @@ describe("filter bar", () => {
   });
 
   it("removes a chosen source and clears every filter", () => {
-    show({ ...NO_FILTERS, sources: [3], priorities: ["low"] });
+    const view = show({ ...NO_FILTERS, sources: [3], priorities: ["low"] });
     fireEvent.click(screen.getByRole("button", { name: "Remove SNUH board" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     expect(nav.pushed).toEqual(["/?pr=low"]);
+    expect(screen.getByRole("button", { name: "Apply" }).getAttribute("aria-busy")).toBe("true");
+    // The new address has arrived, which ends the spinner, and then the filters can be cleared.
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <FeedFilterBar
+          sources={sources}
+          projects={[{ id: 9, name: "My study" }]}
+          current={{ ...NO_FILTERS, priorities: ["low"] }}
+        />
+      </NextIntlClientProvider>,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(nav.pushed[1]).toBe("/");
   });

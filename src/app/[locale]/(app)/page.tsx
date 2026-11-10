@@ -92,19 +92,28 @@ export default async function FeedPage({
     <main className="mx-auto w-full max-w-6xl p-6">
       <h1 className="text-2xl font-semibold">{t("title")}</h1>
 
+      {/* The numbers cover everything the user may read, whatever the filters say. */}
+      <Dashboard sources={sourcesError ? null : (sources ?? [])} />
+
       <FeedFilterBar
         // A new address (filters applied elsewhere, back button) starts the bar fresh.
         key={JSON.stringify(keep)}
         sources={(sources ?? []).map((s) => ({ id: s.id, name: s.name }))}
         projects={(projects ?? []).map((p) => ({ id: p.id, name: p.name }))}
         current={filters}
+        paging={changePage > 1 || parsePage(rp) > 1}
       />
 
-      {/* The numbers cover everything the user may read, whatever the filters say. */}
-      <Dashboard sources={sourcesError ? null : (sources ?? [])} />
-
-      {/* Wide screens: recently added documents on the left, changes on the right. */}
-      <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:items-start">
+      {/* Wide screens: recently added documents on the left, changes on the right.
+          data-nav-pending (set while a filter or page link is loading) dims this block. */}
+      <div className="relative mt-8" data-feed-results>
+        <div className="pointer-events-none absolute inset-x-0 top-10 z-10 hidden justify-center in-data-[nav-pending=true]:flex">
+          <span
+            className="size-6 animate-spin rounded-full border-2 border-muted-foreground/25 border-t-foreground motion-reduce:animate-none"
+            aria-hidden
+          />
+        </div>
+        <div className="grid gap-8 transition-opacity lg:grid-cols-2 lg:items-start in-data-[nav-pending=true]:pointer-events-none in-data-[nav-pending=true]:opacity-50">
         <RecentDocuments
           sources={recentSources}
           sourcesFailed={Boolean(sourcesError)}
@@ -190,6 +199,7 @@ export default async function FeedPage({
             />
           )}
         </section>
+        </div>
       </div>
     </main>
   );

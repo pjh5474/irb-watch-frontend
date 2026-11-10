@@ -166,6 +166,26 @@ describe("study account", () => {
     expect((screen.getByLabelText("Hospital login ID") as HTMLInputElement).value).toBe("");
   });
 
+  it("an R-BAY board files its login under the site the server names (one per hospital)", async () => {
+    api.source = {
+      ...STUDY,
+      adapter: "rbay",
+      url: "https://www.r-bay.co.kr/agency/main/b1ZKS1VGblAvTU1hMU5Rb0xWcUp4UT09?board=REGLA",
+      login_user: "owner",
+      login_site: "rbay-b1ZKS1VGblAvTU1hMU5Rb0xWcUp4UT09",
+    };
+    show();
+    expect(await screen.findByText(/R-BAY logins are stored per hospital/)).toBeTruthy();
+    expect(screen.queryByText(/no board key/)).toBeNull();
+    fireEvent.change(screen.getByLabelText("Hospital login ID"), { target: { value: "rbay_id" } });
+    fireEvent.change(screen.getByLabelText("Hospital password"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save login" }));
+    expect(await screen.findByText("Login saved.")).toBeTruthy();
+    expect(called("saveLogin")).toEqual([
+      ["saveLogin", "owner", "rbay-b1ZKS1VGblAvTU1hMU5Rb0xWcUp4UT09", "rbay_id", "pw"],
+    ]);
+  });
+
   it("two clicks in the same instant send the login once", async () => {
     show();
     await screen.findByText(/No login is stored yet/);

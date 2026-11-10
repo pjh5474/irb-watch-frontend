@@ -14,7 +14,7 @@ import { Section } from "@/components/admin/section";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
-import { adminApi, loginSite, type AdminSource } from "@/lib/api/admin";
+import { adminApi, isRbaySite, loginSite, type AdminSource } from "@/lib/api/admin";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 type Message = { kind: "ok" | "error"; text: string } | null;
@@ -250,7 +250,7 @@ function Account({ source }: { source: AdminSource }) {
   const [message, setMessage] = useState<Message>(null);
 
   const label = source.login_user ?? "";
-  const site = loginSite(source.url);
+  const site = loginSite(source);
   const logins = useStoredLogins([source]);
   const stored = logins.data?.find((l) => l.owner_label === label && l.site === site);
   const refresh = () => queryClient.invalidateQueries({ queryKey: LOGINS_KEY });
@@ -307,6 +307,7 @@ function Account({ source }: { source: AdminSource }) {
     <Section icon={KeyRound} accent="amber" title={t("accountTitle")}>
       <p className="text-sm opacity-80">{t("accountIntro", { label })}</p>
       {!site && <p className="text-sm text-red-600">{t("noBoardKey")}</p>}
+      {isRbaySite(site) && <p className="text-sm opacity-80">{t("rbayShared", { label })}</p>}
       {logins.isError && (
         <p role="alert" className="text-sm text-red-600">
           {adminErrorText(logins.error, t)}

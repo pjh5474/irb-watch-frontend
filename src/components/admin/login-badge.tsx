@@ -34,7 +34,7 @@ export function useStoredLogins(sources: AdminSource[] | undefined): UseQueryRes
 export function loginStateOf(source: AdminSource, logins: UseQueryResult<StoredLogin[]>): LoginState {
   if (!needsLogin(source)) return "none";
   // An address with no board key can never have a login filed for it.
-  const site = loginSite(source.url);
+  const site = loginSite(source);
   if (!site) return "missing";
   if (logins.isError) return "unknown";
   if (!logins.data) return "checking";

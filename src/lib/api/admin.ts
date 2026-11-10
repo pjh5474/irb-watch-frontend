@@ -20,6 +20,9 @@ export type AdminSource = {
   requires_login: boolean;
   scans_paused_reason: string | null;
   ai_enabled: boolean;
+  // Where the server files this source's stored login: snuh-<board key>, or
+  // rbay-<hospital code> (one login per R-BAY hospital). Older servers do not send it.
+  login_site?: string | null;
 };
 
 export type SourceMember = {
@@ -72,13 +75,21 @@ export const adminApi = {
     }),
 };
 
-// The name a SNUH board's stored login is filed under: snuh-<board key> (the ?key= number in
-// the board address). Null when the address has no key.
-export function loginSite(sourceUrl: string): string | null {
+// The name a source's stored login is filed under. The server says it (login_site), so the two
+// can never disagree: snuh-<board key>, or rbay-<hospital code> (an R-BAY account can enter
+// only the hospitals it is registered with, so each hospital has its own login, shared by its
+// boards). Without it (an older server) a SNUH address still gives snuh-<the ?key= number>.
+// Null when no site name is known.
+export function loginSite(source: Pick<AdminSource, "url" | "login_site">): string | null {
+  if (source.login_site) return source.login_site;
   try {
-    const key = new URL(sourceUrl).searchParams.get("key");
+    const key = new URL(source.url).searchParams.get("key");
     return key && /^\d+$/.test(key) ? `snuh-${key}` : null;
   } catch {
     return null;
   }
+}
+
+export function isRbaySite(site: string | null): boolean {
+  return Boolean(site?.startsWith("rbay-"));
 }

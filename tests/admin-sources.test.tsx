@@ -15,6 +15,8 @@ const api = vi.hoisted(() => ({
   loginsError: null as unknown,
   testMail: async (): Promise<unknown> => ({ status: "sent" }),
   weekly: async (): Promise<unknown> => ({ status: "sent" }),
+  updateFails: new Set<number>(),
+  createError: null as unknown,
 }));
 
 vi.mock("@/i18n/navigation", async () => {
@@ -38,7 +40,20 @@ vi.mock("@/lib/api/admin", async () => {
       },
       scanAll: async () => ({ status: "started" }),
       scanSource: async () => ({ status: "started" }),
-      createSource: async () => ({}),
+      scanSelected: async (ids: number[]) => {
+        api.calls.push(`scanSelected ${ids.join(",")}`);
+        return { status: "started", count: ids.length };
+      },
+      updateSource: async (id: number, body: unknown) => {
+        api.calls.push(`update ${id} ${JSON.stringify(body)}`);
+        if (api.updateFails.has(id)) throw new ApiError(403, "not allowed for this source");
+        return {};
+      },
+      createSource: async (body: { name: string }) => {
+        api.calls.push(`createSource ${body.name}`);
+        if (api.createError) throw api.createError;
+        return {};
+      },
       sendTestMail: async () => {
         api.calls.push("sendTestMail");
         return api.testMail();
@@ -84,6 +99,8 @@ beforeEach(() => {
   api.calls.length = 0;
   api.testMail = async () => ({ status: "sent" });
   api.weekly = async () => ({ status: "sent" });
+  api.updateFails = new Set();
+  api.createError = null;
 });
 afterEach(cleanup);
 
@@ -116,7 +133,7 @@ describe("stored login sign", () => {
   it("shows no login sign for a public source and does not even ask for the logins", async () => {
     api.sources = [PUBLIC];
     show();
-    await screen.findByText("Public board");
+    await screen.findByRole("link", { name: "Public board" });
     expect(screen.queryByText("Login saved")).toBeNull();
     expect(screen.queryByText("No login saved")).toBeNull();
     expect(screen.queryByText("Login status unknown")).toBeNull();
@@ -140,40 +157,113 @@ describe("stored login sign", () => {
   });
 });
 
-describe("paging of the source list", () => {
-  const many = (n: number) =>
-    Array.from({ length: n }, (_, i) => ({ ...PUBLIC, id: i + 1, name: `Board ${i + 1}`, url: `https://hrpp.snuh.org/hrpp/bbs/list.do?key=${1000 + i}` }));
+const RBAY = (id: number, name: string, board: string, code = "b1ZKS1VGblAvTU1hMU5Rb0xWcUp4UT09") => ({
+  ...base,
+  id,
+  name,
+  adapter: "rbay",
+  url: `https://www.r-bay.co.kr/agency/main/${code}?board=${board}`,
+  login_user: "owner",
+  requires_login: true,
+});
 
-  it("shows 10 sources a page and moves to the next with the pager", async () => {
-    api.sources = many(23);
+describe("grouped by hospital or site", () => {
+  it("puts each R-BAY hospital's boards together under the name they share", async () => {
+    api.sources = [RBAY(11,"이화목동 관련규정", "REGLA"), RBAY(12,"이화목동 공지", "NOTI"), RBAY(13,"대구가톨릭 공지", "NOTI", "emNyaVJpcTBZT0RnUmVvL2d6Qlordz09"), PUBLIC];
     show();
-    await screen.findByText("Board 1");
-    expect(screen.queryByText("Board 11")).toBeNull();
-    expect(screen.getAllByRole("link", { name: /Board \d+/ })).toHaveLength(10);
+    const ewha = await screen.findByRole("button", { name: /이화목동 · R-BAY · 2 sources/ });
+    expect(ewha.getAttribute("aria-expanded")).toBe("true"); // a small setup starts open
+    expect(screen.getByRole("link", { name: "이화목동 관련규정" })).toBeTruthy();
+    fireEvent.click(ewha);
+    expect(screen.queryByRole("link", { name: "이화목동 관련규정" })).toBeNull();
+    expect(screen.getByRole("link", { name: "대구가톨릭 공지" })).toBeTruthy(); // other groups stay open
+  });
 
+  it("pages by group: 20 groups a page", async () => {
+    api.sources = Array.from({ length: 23 }, (_, i) => ({
+      ...PUBLIC,
+      id: i + 1,
+      name: `Board ${i + 1}`,
+      url: `https://site${String(i + 1).padStart(2, "0")}.example.org/list?key=1`,
+    }));
+    show();
+    await screen.findByText(/23 of 23 sources in 23 groups/);
+    const groupButtons = () => screen.getAllByRole("button", { name: /· site\d+\.example\.org/ });
+    expect(groupButtons()).toHaveLength(20);
     fireEvent.click(screen.getByRole("button", { name: /Next/ }));
-    expect(await screen.findByText("Board 11")).toBeTruthy();
-    expect(screen.queryByText("Board 1")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Go to page 3" }));
-    expect(await screen.findByText("Board 23")).toBeTruthy();
-    expect(screen.getAllByRole("link", { name: /Board \d+/ })).toHaveLength(3);
+    expect(groupButtons()).toHaveLength(3);
   });
 
-  it("has no pager for 10 sources or fewer", async () => {
-    api.sources = many(10);
+  it("the attention banner counts every source and its link filters to them", async () => {
+    const broken = { ...PUBLIC, id: 99, name: "Broken board", url: "https://other.example.org/x", last_scan_status: "failed", last_scan_error: "x", last_scan_at: "2026-11-09T00:00:00+00:00" };
+    api.sources = [PUBLIC, broken];
     show();
-    await screen.findByText("Board 10");
-    expect(screen.queryByRole("navigation", { name: "Pages" })).toBeNull();
-  });
-
-  it("the attention banner still counts sources on other pages", async () => {
-    const broken = { ...PUBLIC, id: 99, name: "Broken board", last_scan_status: "failed", last_scan_error: "x", last_scan_at: "2026-11-09T00:00:00+00:00" };
-    api.sources = [...many(12), broken];
-    show();
-    await screen.findByText("Board 1");
-    expect(screen.queryByText("Broken board")).toBeNull(); // on page 2
     expect(await screen.findByText(/1 source\(s\) need attention/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show them" }));
+    expect(screen.queryByRole("link", { name: "Public board" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Broken board" })).toBeTruthy();
+  });
+
+  it("search finds sources by name, hospital or address", async () => {
+    api.sources = [RBAY(11,"이화목동 관련규정", "REGLA"), RBAY(12,"이화목동 공지", "NOTI"), PUBLIC];
+    show();
+    await screen.findByRole("link", { name: "Public board" });
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "공지" } });
+    expect(screen.getByRole("link", { name: "이화목동 공지" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "이화목동 관련규정" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Public board" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "nothing like this" } });
+    expect(screen.getByText("No source matches these filters.")).toBeTruthy();
+  });
+});
+
+describe("bulk actions", () => {
+  it("scans the selected sources together (the server queues them per site)", async () => {
+    api.sources = [RBAY(11,"이화목동 관련규정", "REGLA"), RBAY(12,"이화목동 공지", "NOTI"), PUBLIC];
+    show();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select every source of 이화목동" }));
+    expect(screen.getByText("2 selected")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Scan selected" }));
+    expect(await screen.findByText(/Scan started for 2 sources/)).toBeTruthy();
+    expect(api.calls).toContain("scanSelected 11,12");
+  });
+
+  it("switches AI off for each selected source and reports any failure with its reason", async () => {
+    api.sources = [PUBLIC, { ...PUBLIC, id: 2, name: "Second board", url: "https://hrpp.snuh.org/hrpp/bbs/list.do?key=2" }];
+    api.updateFails = new Set([2]);
+    show();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select Public board" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Second board" }));
+    fireEvent.click(screen.getByRole("button", { name: "AI off" }));
+    expect(await screen.findByText(/AI off: done for 1, failed for 1: Second board: .*not allowed/)).toBeTruthy();
+    expect(api.calls.filter((c) => c.startsWith("update"))).toEqual(['update 1 {"ai_enabled":false}', 'update 2 {"ai_enabled":false}']);
+  });
+});
+
+describe("add-source dialog", () => {
+  it("opens from the button, adds the source and closes", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Add a source" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "New board" } });
+    fireEvent.change(screen.getByLabelText(/Board address/), { target: { value: "https://hrpp.snuh.org/hrpp/bbs/list.do?key=1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+    expect(await screen.findByText('Source "New board" added.')).toBeTruthy();
+    expect(dialog.isConnected).toBe(false);
+    expect(api.calls).toContain("createSource New board");
+  });
+
+  it("keeps the dialog open with the server's reason when adding fails, and Escape closes it", async () => {
+    api.createError = new ApiError(422, "add ?board=<code> to the R-BAY address");
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Add a source" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "x" } });
+    fireEvent.change(screen.getByLabelText(/Board address/), { target: { value: "https://www.r-bay.co.kr/agency/main/abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+    expect(await screen.findByText(/add \?board=<code>/)).toBeTruthy();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
 

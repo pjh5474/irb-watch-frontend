@@ -46,6 +46,9 @@ export const adminApi = {
   ) => apiFetch<AdminSource>(`/admin/sources/${id}`, json("PATCH", body)),
   scanSource: (id: number) => apiFetch<{ status: string }>(`/admin/sources/${id}/scan`, { method: "POST" }),
   scanAll: () => apiFetch<{ status: string }>("/admin/scans/run-all", { method: "POST" }),
+  // The chosen sources, with the daily run's rules (one site at a time, never in parallel).
+  scanSelected: (ids: number[]) =>
+    apiFetch<{ status: string; count: number }>("/admin/scans/run-selected", json("POST", { source_ids: ids })),
   // A short mail to the calling admin's own address, to check the mail settings.
   sendTestMail: () => apiFetch<{ status: string }>("/admin/mail/test", { method: "POST" }),
   // The weekly usage report for the last 7 days, sent to the calling admin's own address only.

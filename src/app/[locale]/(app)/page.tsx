@@ -1,11 +1,12 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 import { Dashboard } from "@/components/dashboard";
+import { FeedFilterBar } from "@/components/feed-filters";
 import { MarkdownText } from "@/components/markdown-text";
 import { Pagination } from "@/components/pagination";
 import { RecentDocuments } from "@/components/recent-documents";
-import { SourceFilter } from "@/components/source-filter";
 import { Link } from "@/i18n/navigation";
-import { clampPage, pageCount, pageRange, parsePage } from "@/lib/paging";
+import { allowedSources, FEED_PAGE_SIZE, filterParams, parseFeedFilters, since } from "@/lib/feed-filters";
+import { pageCount, parsePage } from "@/lib/paging";
 import { createClient } from "@/lib/supabase/server";
 
 const PRIORITY_STYLE: Record<string, string> = {
@@ -19,73 +20,97 @@ export default async function FeedPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ source?: string; cp?: string; rp?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
-  const { source, cp, rp } = await searchParams;
+  const query = await searchParams;
   setRequestLocale(locale);
   const t = await getTranslations("feed");
   const format = await getFormatter();
   const supabase = await createClient();
+  const filters = parseFeedFilters(query);
+  const cp = typeof query.cp === "string" ? query.cp : undefined;
+  const rp = typeof query.rp === "string" ? query.rp : undefined;
 
   // Explicit safe columns: RLS cannot hide sources.config / last_scan_error from users.
   const { data: sources, error: sourcesError } = await supabase
     .from("sources")
     .select("id, name, is_active, last_scan_at, last_scan_status")
-    .order("id");
+    .order("name");
   const names = new Map((sources ?? []).map((s) => [s.id, s.name]));
-  const sourceId = source && /^\d+$/.test(source) ? Number(source) : null;
 
-  // The changes are paged by their own parameter (cp); the recent documents next to them have
-  // theirs (rp). A page past the end shows the last page instead of an error.
-  let countQuery = supabase
-    .from("audit_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("category", "document");
-  if (sourceId !== null) countQuery = countQuery.eq("source_id", sourceId);
-  const { count: changeTotal, error: countError } = await countQuery;
-  const changePages = pageCount(changeTotal ?? 0);
-  const changePage = clampPage(parsePage(cp), changePages);
-  const [from, to] = pageRange(changePage);
+  // The user's own projects (row-level security), for the "only my project's sites" filter.
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id, name, project_sources(source_id)")
+    .order("name");
+  const project = (projects ?? []).find((p) => p.id === filters.project);
+  const allowed = allowedSources(filters, project ? project.project_sources.map((l) => l.source_id) : null);
+  const from = since(filters.days);
 
-  let query = supabase
-    .from("audit_logs")
-    .select("id, created_at, event_type, source_id, document_id, title, summary, priority, payload")
-    .eq("category", "document")
-    .order("created_at", { ascending: false })
-    .range(from, to);
-  if (sourceId !== null) query = query.eq("source_id", sourceId);
-  const { data: cards, error: listError } = await query;
-  const error = countError ?? listError;
+  // The changes, filtered in the database. One query returns the page and the total; a page past
+  // the end is read again as the last page instead of showing an error.
+  async function loadChanges(page: number) {
+    let q = supabase
+      .from("audit_logs")
+      .select("id, created_at, event_type, source_id, document_id, title, summary, priority, payload", {
+        count: "exact",
+      })
+      .eq("category", "document");
+    if (allowed !== null) q = q.in("source_id", allowed);
+    if (filters.priorities.length) q = q.in("priority", filters.priorities);
+    if (filters.types.length) q = q.in("event_type", filters.types.map((type) => `document.${type}`));
+    if (from) q = q.gte("created_at", from);
+    const start = (page - 1) * FEED_PAGE_SIZE;
+    return q.order("created_at", { ascending: false }).order("id", { ascending: false }).range(start, start + FEED_PAGE_SIZE - 1);
+  }
+
+  const nothingCanMatch = allowed !== null && allowed.length === 0;
+  let changePage = parsePage(cp);
+  let changes = nothingCanMatch ? null : await loadChanges(changePage);
+  let changePages = pageCount(changes?.count ?? 0, FEED_PAGE_SIZE);
+  if (changes && (changes.error?.code === "PGRST103" || changePage > changePages)) {
+    changePage = changePages;
+    changes = await loadChanges(changePage);
+    changePages = pageCount(changes.count ?? 0, FEED_PAGE_SIZE);
+  }
+  const cards = changes?.data ?? [];
+  const error = changes?.error ?? null;
 
   // The audit log outlives the documents it describes (and RLS hides what a user may not
   // read), so link a card only when its document can really be opened.
-  const documentIds = [...new Set((cards ?? []).flatMap((c) => (c.document_id === null ? [] : [c.document_id])))];
+  const documentIds = [...new Set(cards.flatMap((c) => (c.document_id === null ? [] : [c.document_id])))];
   const { data: openable } = documentIds.length
     ? await supabase.from("documents").select("id").in("id", documentIds)
     : { data: [] };
   const openableIds = new Set((openable ?? []).map((d) => d.id));
 
+  const keep = filterParams(filters);
+  const recentSources = (sources ?? []).filter((s) => allowed === null || allowed.includes(s.id));
+
   return (
     <main className="mx-auto w-full max-w-6xl p-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <SourceFilter
-          sources={(sources ?? []).map((s) => ({ id: s.id, name: s.name }))}
-          current={sourceId}
-        />
-      </div>
+      <h1 className="text-2xl font-semibold">{t("title")}</h1>
 
-      {/* The numbers cover everything the user may read, whatever the source filter says. */}
+      <FeedFilterBar
+        // A new address (filters applied elsewhere, back button) starts the bar fresh.
+        key={JSON.stringify(keep)}
+        sources={(sources ?? []).map((s) => ({ id: s.id, name: s.name }))}
+        projects={(projects ?? []).map((p) => ({ id: p.id, name: p.name }))}
+        current={filters}
+      />
+
+      {/* The numbers cover everything the user may read, whatever the filters say. */}
       <Dashboard sources={sourcesError ? null : (sources ?? [])} />
 
       {/* Wide screens: recently added documents on the left, changes on the right. */}
       <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:items-start">
         <RecentDocuments
-          sources={(sources ?? []).filter((s) => sourceId === null || s.id === sourceId)}
+          sources={recentSources}
           sourcesFailed={Boolean(sourcesError)}
+          days={filters.days}
           page={parsePage(rp)}
-          keep={{ source: sourceId === null ? undefined : String(sourceId), cp: changePage > 1 ? String(changePage) : undefined }}
+          keep={{ ...keep, cp: changePage > 1 ? String(changePage) : undefined }}
         />
 
         <section aria-labelledby="changes-title">
@@ -98,10 +123,10 @@ export default async function FeedPage({
               {t("loadError")}
             </p>
           )}
-          {!error && cards?.length === 0 && <p className="mt-3 text-sm opacity-70">{t("empty")}</p>}
+          {!error && cards.length === 0 && <p className="mt-3 text-sm opacity-70">{t("empty")}</p>}
 
           <ul className="mt-3 flex flex-col gap-3">
-            {cards?.map((card, index) => {
+            {cards.map((card, index) => {
               const payload = (card.payload ?? {}) as { version_no?: number };
               // event_type is "document.updated" etc.; message keys cannot contain dots.
               const eventKey = `event.${card.event_type.replace(/^document\./, "")}` as const;
@@ -161,10 +186,7 @@ export default async function FeedPage({
               pages={changePages}
               pathname="/"
               param="cp"
-              query={{
-                source: sourceId === null ? undefined : String(sourceId),
-                rp: parsePage(rp) > 1 ? String(parsePage(rp)) : undefined,
-              }}
+              query={{ ...keep, rp: parsePage(rp) > 1 ? String(parsePage(rp)) : undefined }}
             />
           )}
         </section>

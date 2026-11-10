@@ -39,6 +39,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_settings: {
+        Row: {
+          admin_daily_limit: number
+          id: number
+          updated_at: string
+          updated_by: string | null
+          user_daily_limit: number
+        }
+        Insert: {
+          admin_daily_limit?: number
+          id?: number
+          updated_at?: string
+          updated_by?: string | null
+          user_daily_limit?: number
+        }
+        Update: {
+          admin_daily_limit?: number
+          id?: number
+          updated_at?: string
+          updated_by?: string | null
+          user_daily_limit?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_instructions: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          feature: string
+          id: number
+          restored_from: number | null
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          feature: string
+          id?: never
+          restored_from?: number | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          feature?: string
+          id?: never
+          restored_from?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_instructions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_instructions_restored_from_fkey"
+            columns: ["restored_from"]
+            isOneToOne: false
+            referencedRelation: "ai_instructions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           actor_id: string | null
@@ -80,6 +154,83 @@ export type Database = {
           title?: string | null
         }
         Relationships: []
+      }
+      chat_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_conversations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          actions: Json
+          content: string
+          conversation_id: string
+          created_at: string
+          id: number
+          role: string
+          user_id: string
+        }
+        Insert: {
+          actions?: Json
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: never
+          role: string
+          user_id: string
+        }
+        Update: {
+          actions?: Json
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: never
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       document_version_files: {
         Row: {
@@ -256,6 +407,142 @@ export type Database = {
           },
         ]
       }
+      draft_versions: {
+        Row: {
+          created_at: string
+          draft_id: string
+          id: number
+          instruction: string
+          markdown: string
+          origin: string
+          user_id: string
+          version_no: number
+        }
+        Insert: {
+          created_at?: string
+          draft_id: string
+          id?: never
+          instruction?: string
+          markdown: string
+          origin: string
+          user_id: string
+          version_no: number
+        }
+        Update: {
+          created_at?: string
+          draft_id?: string
+          id?: never
+          instruction?: string
+          markdown?: string
+          origin?: string
+          user_id?: string
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draft_versions_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_versions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drafts: {
+        Row: {
+          ai_override_source_ids: number[]
+          created_at: string
+          document_refs: Json
+          extra_guides: Json
+          guide_ids: number[]
+          id: string
+          instruction: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_override_source_ids?: number[]
+          created_at?: string
+          document_refs?: Json
+          extra_guides?: Json
+          guide_ids?: number[]
+          id?: string
+          instruction?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_override_source_ids?: number[]
+          created_at?: string
+          document_refs?: Json
+          extra_guides?: Json
+          guide_ids?: number[]
+          id?: string
+          instruction?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drafts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guides: {
+        Row: {
+          archived_at: string | null
+          body_text: string
+          created_at: string
+          created_by: string | null
+          filename: string
+          id: number
+          sha256: string
+          title: string
+        }
+        Insert: {
+          archived_at?: string | null
+          body_text: string
+          created_at?: string
+          created_by?: string | null
+          filename?: string
+          id?: never
+          sha256: string
+          title: string
+        }
+        Update: {
+          archived_at?: string | null
+          body_text?: string
+          created_at?: string
+          created_by?: string | null
+          filename?: string
+          id?: never
+          sha256?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guides_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mail_claims: {
         Row: {
           created_at: string
@@ -327,6 +614,74 @@ export type Database = {
         }
         Relationships: []
       }
+      project_sources: {
+        Row: {
+          added_at: string
+          project_id: number
+          source_id: number
+        }
+        Insert: {
+          added_at?: string
+          project_id: number
+          source_id: number
+        }
+        Update: {
+          added_at?: string
+          project_id?: number
+          source_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_sources_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_sources_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          id: number
+          name: string
+          note: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          name: string
+          note?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          name?: string
+          note?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_credentials: {
         Row: {
           ciphertext: string
@@ -383,6 +738,39 @@ export type Database = {
             foreignKeyName: "source_alert_state_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: true
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      source_guides: {
+        Row: {
+          created_at: string
+          guide_id: number
+          source_id: number
+        }
+        Insert: {
+          created_at?: string
+          guide_id: number
+          source_id: number
+        }
+        Update: {
+          created_at?: string
+          guide_id?: number
+          source_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_guides_guide_id_fkey"
+            columns: ["guide_id"]
+            isOneToOne: false
+            referencedRelation: "guides"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_guides_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
             referencedRelation: "sources"
             referencedColumns: ["id"]
           },

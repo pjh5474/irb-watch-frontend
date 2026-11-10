@@ -34,6 +34,17 @@ export type SourceMember = {
 
 export type StoredLogin = { owner_label: string; site: string; updated_at: string | null };
 
+// A document in "needs review". file_warning: only file problems (too big to download,
+// unreadable, a broken zip), which an admin may mark OK; false = the post failed to load.
+export type ReviewItem = {
+  document_id: number;
+  source_id: number;
+  source_name: string;
+  title: string;
+  review_reason: string;
+  file_warning: boolean;
+};
+
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 
 export const adminApi = {
@@ -53,6 +64,10 @@ export const adminApi = {
   sendTestMail: () => apiFetch<{ status: string }>("/admin/mail/test", { method: "POST" }),
   // The weekly usage report for the last 7 days, sent to the calling admin's own address only.
   sendWeeklyPreview: () => apiFetch<{ status: string }>("/admin/mail/weekly-preview", { method: "POST" }),
+  reviews: () => apiFetch<ReviewItem[]>("/admin/documents/reviews"),
+  // The document's file warnings are OK: it leaves "needs review" until the warning changes.
+  reviewOk: (documentId: number) =>
+    apiFetch<ReviewItem>(`/admin/documents/${documentId}/review-ok`, { method: "POST" }),
   // Writes the whole-document summary again and replaces the saved one for everyone.
   resummarize: (documentId: number) =>
     apiFetch<{ summary: string; version_no: number; replaced: boolean }>(

@@ -420,7 +420,18 @@
     "rbayShared": "R-BAY logins are stored per hospital: the boards of this hospital with the login label \"{label}\" share this ID and password, so a change or delete here applies to all of them. Other hospitals have their own login.",
     "loginStored": "A login is stored (saved {date}).",
     "loginMissing": "No login is stored yet. Scans of this source will fail until you save one.",
-    "tabs": { "sources": "Sources", "guides": "Guides", "ai": "AI instructions", "assistant": "Assistant" },
+    "tabs": { "sources": "Sources", "reviews": "Warnings", "guides": "Guides", "ai": "AI instructions", "assistant": "Assistant" },
+    "reviews": {
+      "title": "Documents needing review",
+      "intro": "Posts with a file problem: a file too big to download, unreadable, damaged or password-protected, or a broken zip. The post itself is stored. Mark it OK once checked: it stays quiet until the problem changes. A post that failed to load cannot be marked OK; it keeps its old state until the cause is fixed.",
+      "empty": "Nothing needs review.",
+      "count": "{n, plural, one {# document} other {# documents}} (newest first, at most 500)",
+      "ok": "OK, reviewed",
+      "okHint": "Stays quiet until this file problem changes.",
+      "done": "Marked OK.",
+      "doneNamed": "Marked OK: {title}",
+      "failedPost": "This post failed to load and keeps its old state; it cannot be marked OK here."
+    },
     "ai": {
       "title": "AI instructions",
       "intro": "Add instructions to each AI feature: tone, wording, terms, format. They are added after the fixed safety rules, which cannot be changed here (document text is never obeyed, no links or HTML, the chat cannot change anything). A saved change applies to the next AI answer, with no restart.",

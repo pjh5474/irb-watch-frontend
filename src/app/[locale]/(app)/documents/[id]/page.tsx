@@ -1,5 +1,6 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
+import { ReviewOkButton } from "@/components/admin/review-list";
 import { DiffView } from "@/components/diff-view";
 import { FileList, type FileRow } from "@/components/file-list";
 import { MarkdownText } from "@/components/markdown-text";
@@ -112,9 +113,13 @@ export default async function DocumentPage({
           </Link>
         </div>
         {document.status === "needs_review" && document.review_reason && (
-          <p className="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
-            {t("needsReview")}: {document.review_reason}
-          </p>
+          <div className="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
+            <p>
+              {t("needsReview")}: {document.review_reason}
+            </p>
+            {/* UI hint only: the server checks the role and that these are file warnings. */}
+            {access?.isAdmin && <ReviewOkButton documentId={documentId} />}
+          </div>
         )}
       </header>
 

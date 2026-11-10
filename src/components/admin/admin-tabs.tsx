@@ -9,12 +9,13 @@ export function AdminTabs() {
   const pathname = usePathname();
   const tabs = [
     { href: "/admin/sources", label: t("tabs.sources"), active: pathname.startsWith("/admin/sources") },
+    { href: "/admin/reviews", label: t("tabs.reviews"), active: pathname.startsWith("/admin/reviews") },
     { href: "/admin/guides", label: t("tabs.guides"), active: pathname.startsWith("/admin/guides") },
     { href: "/admin/ai", label: t("tabs.ai"), active: pathname.startsWith("/admin/ai") },
     { href: "/admin/assistant", label: t("tabs.assistant"), active: pathname.startsWith("/admin/assistant") },
   ];
   return (
-    <nav aria-label="Admin" className="mx-auto flex w-full max-w-3xl gap-1 px-6 pt-4 text-sm">
+    <nav aria-label="Admin" className="mx-auto flex w-full max-w-6xl flex-wrap gap-1 px-6 pt-4 text-sm">
       {tabs.map((tab) => (
         <Link
           key={tab.href}

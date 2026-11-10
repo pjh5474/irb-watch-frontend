@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { SOURCES_KEY } from "@/components/admin/admin-sources";
 import { adminErrorText } from "@/components/admin/error-text";
 import { Section } from "@/components/admin/section";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,8 @@ export function ReviewList() {
         setMessage({ kind: "error", text: adminErrorText(e, t) });
       }
       await queryClient.invalidateQueries({ queryKey: REVIEWS_KEY });
+      // The server may have turned the source's light green too.
+      await queryClient.invalidateQueries({ queryKey: SOURCES_KEY });
     });
   }
 

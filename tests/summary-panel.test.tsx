@@ -62,6 +62,13 @@ describe("SummaryPanel: first summary", () => {
     fireEvent.click(screen.getByRole("button", { name: /Create AI summary/ }));
     expect(await screen.findByRole("alert")).toBeTruthy();
   });
+
+  it("a 403 shows the server's reason (it no longer signs the user out)", async () => {
+    api.impl = fails(403, "this account cannot request summaries");
+    panel({ cached: null });
+    fireEvent.click(screen.getByRole("button", { name: /Create AI summary/ }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/this account cannot request summaries/);
+  });
 });
 
 describe("SummaryPanel: admin re-summarize", () => {

@@ -3,12 +3,14 @@
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 
-// The admin area's two parts. The page you are on is marked with aria-current.
+// The admin area's parts. The page you are on is marked with aria-current.
 export function AdminTabs() {
   const t = useTranslations("admin");
   const pathname = usePathname();
   const tabs = [
     { href: "/admin/sources", label: t("tabs.sources"), active: pathname.startsWith("/admin/sources") },
+    { href: "/admin/guides", label: t("tabs.guides"), active: pathname.startsWith("/admin/guides") },
+    { href: "/admin/ai", label: t("tabs.ai"), active: pathname.startsWith("/admin/ai") },
     { href: "/admin/assistant", label: t("tabs.assistant"), active: pathname.startsWith("/admin/assistant") },
   ];
   return (

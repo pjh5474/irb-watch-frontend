@@ -40,6 +40,8 @@ export function SummaryPanel({
     else if (e instanceof ApiError && e.status === 503) setBlock("unavailable");
     else if (e instanceof ApiError && e.status === 0) setError(t("summaryError.unreachable"));
     else if (e instanceof ApiError && e.status === 404) setError(t("summaryError.notFound"));
+    // A 403 (for example a deleted account) carries the server's own reason: show it.
+    else if (e instanceof ApiError && e.status === 403 && e.message) setError(e.message);
     else setError(t("summaryError.generic"));
   }
 

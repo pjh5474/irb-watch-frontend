@@ -53,7 +53,12 @@ export function FileList({ files }: { files: FileRow[] }) {
       a.click();
       a.remove();
     } catch (error) {
-      setErrors((prev) => ({ ...prev, [file.id]: t(`downloadError.${errorKey(error)}`) }));
+      // A 403 (for example a deleted account) carries the server's own reason: show it.
+      const text =
+        error instanceof ApiError && error.status === 403 && error.message
+          ? error.message
+          : t(`downloadError.${errorKey(error)}`);
+      setErrors((prev) => ({ ...prev, [file.id]: text }));
     } finally {
       inFlight.current.delete(file.id);
       setBusyIds((prev) => prev.filter((id) => id !== file.id));

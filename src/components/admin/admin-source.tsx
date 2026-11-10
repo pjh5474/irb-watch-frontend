@@ -7,6 +7,7 @@ import { useState } from "react";
 import { SOURCES_KEY } from "@/components/admin/admin-sources";
 import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
+import { SourceGuides } from "@/components/admin/guide-library";
 import { HealthLight } from "@/components/admin/health-light";
 import { LOGINS_KEY, LoginBadge, loginStateOf, useStoredLogins } from "@/components/admin/login-badge";
 import { Section } from "@/components/admin/section";
@@ -62,6 +63,7 @@ export function AdminSource({ id }: { id: number }) {
           <AiSwitch source={source} />
           {source.login_user ? <Account source={source} /> : <MakeMembersOnly source={source} />}
           {source.requires_login && <Members source={source} />}
+          <SourceGuides sourceId={source.id} />
         </>
       )}
     </main>

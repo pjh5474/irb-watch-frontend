@@ -11,6 +11,7 @@ export function AdminTabs() {
     { href: "/admin/sources", label: t("tabs.sources"), active: pathname.startsWith("/admin/sources") },
     { href: "/admin/reviews", label: t("tabs.reviews"), active: pathname.startsWith("/admin/reviews") },
     { href: "/admin/guides", label: t("tabs.guides"), active: pathname.startsWith("/admin/guides") },
+    { href: "/admin/templates", label: t("tabs.templates"), active: pathname.startsWith("/admin/templates") },
     { href: "/admin/ai", label: t("tabs.ai"), active: pathname.startsWith("/admin/ai") },
     { href: "/admin/assistant", label: t("tabs.assistant"), active: pathname.startsWith("/admin/assistant") },
   ];

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2, Paperclip, Search } from "lucide-react";
+import { FilePlus2, FileSpreadsheet, Paperclip, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { adminErrorText } from "@/components/admin/error-text";
@@ -17,6 +17,14 @@ import {
   type Chosen,
   type InitialDoc,
 } from "@/components/drafts/document-picker";
+import {
+  FormChoice,
+  formReady,
+  formRequest,
+  NO_FORM,
+  useOfferedForms,
+  type FormPick,
+} from "@/components/drafts/form-choice";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link, useRouter } from "@/i18n/navigation";
@@ -86,6 +94,7 @@ export function NewDraft({ initial }: { initial: InitialDoc | null }) {
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [request, setRequest] = useState("");
+  const [form, setForm] = useState<FormPick>(NO_FORM);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
   useEffect(() => {
@@ -113,6 +122,8 @@ export function NewDraft({ initial }: { initial: InitialDoc | null }) {
     setFiles(result.files);
   }
 
+  const offered = useOfferedForms(usedSources);
+  const formOk = formReady(form, offered.data);
   const missingAgree = aiOff.some((s) => !agreed.has(s));
   const off = status.data && !status.data.enabled;
   // The guide list must be loaded for the current sources: an explicit list built from a list
@@ -120,7 +131,13 @@ export function NewDraft({ initial }: { initial: InitialDoc | null }) {
   const guidesReady = usedSources.length === 0 || (guides.isSuccess && !guides.isFetching);
   const emptyRow = chosen.some((c) => sendsNothing(c, undefined));
   const canSend =
-    chosen.length > 0 && guidesReady && !missingAgree && !off && !emptyRow && request.length <= MAX_INSTRUCTION_CHARS;
+    chosen.length > 0 &&
+    guidesReady &&
+    !missingAgree &&
+    !off &&
+    !emptyRow &&
+    formOk &&
+    request.length <= MAX_INSTRUCTION_CHARS;
 
   async function generate() {
     if (!canSend) return;
@@ -133,6 +150,7 @@ export function NewDraft({ initial }: { initial: InitialDoc | null }) {
           ...base,
           extra_guides: await Promise.all(files.map(toUpload)),
           instruction: request.trim(),
+          ...(await formRequest(form)),
         });
         // The list and the usage counter changed, wherever the user is now.
         await queryClient.invalidateQueries({ queryKey: ["docgen", "drafts"] });
@@ -191,6 +209,11 @@ export function NewDraft({ initial }: { initial: InitialDoc | null }) {
         )}
       </Section>
 
+      <Section icon={FileSpreadsheet} accent="blue" title={t("stepForm")}>
+        <p className="text-sm opacity-80">{t("stepFormHint")}</p>
+        <FormChoice sourceIds={usedSources} value={form} onChange={setForm} />
+      </Section>
+
       <Section icon={FilePlus2} accent="slate" title={t("step3")}>
         <textarea
           className="min-h-24 rounded border p-2 text-sm"
@@ -214,6 +237,12 @@ export function NewDraft({ initial }: { initial: InitialDoc | null }) {
         {flight.busy && <p className="text-sm opacity-70" role="status">{t("writingHint")}</p>}
         {!flight.busy && chosen.length === 0 && <p className="text-xs opacity-60">{t("needDocuments")}</p>}
         {!flight.busy && missingAgree && <p className="text-xs text-amber-700">{t("needAgree")}</p>}
+        {!flight.busy && !formOk && form.kind === "file" && (
+          <p className="text-xs text-amber-700">{t("form.needFile")}</p>
+        )}
+        {!flight.busy && !formOk && form.kind === "list" && !offered.isFetching && (
+          <p className="text-xs text-amber-700">{t("form.notOffered")}</p>
+        )}
         {error && (
           <p role="alert" className="text-sm text-red-600">
             {error}

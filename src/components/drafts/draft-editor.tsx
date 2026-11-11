@@ -17,12 +17,22 @@ import {
   startPanel,
   type PanelState,
 } from "@/components/drafts/inputs-panel";
+import { FieldEditor } from "@/components/drafts/form-fields";
 import { MarkdownText } from "@/components/markdown-text";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
 import { ApiError, saveFile } from "@/lib/api/client";
-import { docgenApi, elapsed, MAX_INSTRUCTION_CHARS, type DraftDetail, type VersionInputs } from "@/lib/api/docgen";
+import {
+  docgenApi,
+  elapsed,
+  MAX_ANSWER_CHARS,
+  MAX_INSTRUCTION_CHARS,
+  sameAnswers,
+  type Answers,
+  type DraftDetail,
+  type VersionInputs,
+} from "@/lib/api/docgen";
 import { wordDiff } from "@/lib/diff";
 import { pickerSources, pickerTitles } from "@/lib/draft-picker";
 import { useElapsed } from "@/lib/use-elapsed";
@@ -75,6 +85,7 @@ export function DraftEditor({ id }: { id: string }) {
 
   const [viewing, setViewing] = useState<number | null>(null); // null = the newest
   const [buffer, setBuffer] = useState<string | null>(null); // null = no unsaved edits
+  const [answers, setAnswers] = useState<Answers | null>(null); // a form draft's unsaved answers
   const [bufferBase, setBufferBase] = useState<number | null>(null); // version the edits started from
   const [tab, setTab] = useState<"edit" | "preview">("edit");
   const [compareWith, setCompareWith] = useState<number | null>(null);
@@ -110,8 +121,13 @@ export function DraftEditor({ id }: { id: string }) {
   const newest = versions[versions.length - 1];
   const shown = versions.find((v) => v.version_no === viewing) ?? newest;
   const isNewest = shown.version_no === newest.version_no;
+  const form = detail.draft.template ?? null; // a draft that fills a form: answers per field
   const text = isNewest ? (buffer ?? newest.markdown) : shown.markdown;
-  const dirty = buffer !== null && buffer !== newest.markdown;
+  const shownAnswers = isNewest ? (answers ?? newest.fields ?? {}) : (shown.fields ?? {});
+  const dirty = form
+    ? answers !== null && !sameAnswers(answers, newest.fields ?? {})
+    : buffer !== null && buffer !== newest.markdown;
+  const tooLong = !!form && Object.values(shownAnswers).some((v) => typeof v === "string" && v.length > MAX_ANSWER_CHARS);
   const other = compareWith !== null ? versions.find((v) => v.version_no === compareWith) : undefined;
   const diff = other ? wordDiff(other.markdown, shown.markdown) : null;
   const needAgree = sourcesNeedingAgreement(
@@ -140,18 +156,23 @@ export function DraftEditor({ id }: { id: string }) {
 
   function dropEdits() {
     setBuffer(null);
+    setAnswers(null);
     setBufferBase(null);
   }
 
   async function saveEdit() {
-    if (!dirty || buffer === null) return;
+    if (!dirty || tooLong || (form ? answers === null : buffer === null)) return;
     setMessage(null);
     setConflict(false);
     await save.run(async () => {
       try {
         // The version the edits started from: if a newer one appeared meanwhile (another tab,
         // an AI revision), the server refuses instead of building on old text.
-        const v = await docgenApi.saveEdit(id, buffer, bufferBase ?? newest.version_no);
+        const base = bufferBase ?? newest.version_no;
+        const v =
+          form && answers !== null
+            ? await docgenApi.saveFields(id, answers, base)
+            : await docgenApi.saveEdit(id, buffer ?? "", base);
         dropEdits();
         setViewing(null);
         setMessage({ kind: "ok", text: t("saved", { n: v.version_no }) });
@@ -263,7 +284,7 @@ export function DraftEditor({ id }: { id: string }) {
             aria-busy={exporter.busy}
           >
             {exporter.busy ? <Spinner aria-hidden /> : <Download aria-hidden />}
-            {exporter.busy ? t("exporting") : t("export")}
+            {exporter.busy ? t("exporting") : form ? t("form.export") : t("export")}
           </Button>
           {dirty && isNewest && <span className="text-xs text-amber-700">{t("exportUnsaved")}</span>}
         </div>
@@ -288,35 +309,52 @@ export function DraftEditor({ id }: { id: string }) {
               <InputsSummary inputs={shown.inputs} titleOf={titleOf} names={names} guides={detail.guides} />
             </details>
           )}
-          <div className="flex gap-2">
-            <button type="button" className={tabClass(tab === "edit")} onClick={() => setTab("edit")}>
-              {t("edit")}
-            </button>
-            <button type="button" className={tabClass(tab === "preview")} onClick={() => setTab("preview")}>
-              {t("preview")}
-            </button>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <textarea
-              aria-label={t("edit")}
-              className={`min-h-[28rem] rounded border p-3 font-mono text-sm ${tab === "edit" ? "" : "hidden"} md:block`}
-              value={text}
-              readOnly={!isNewest}
-              onChange={(e) => {
-                if (buffer === null) setBufferBase(newest.version_no);
-                setBuffer(e.target.value);
-              }}
-            />
-            <div
-              aria-label={t("preview")}
-              className={`min-h-[28rem] overflow-auto rounded border p-3 ${tab === "preview" ? "" : "hidden"} md:block`}
-            >
-              <MarkdownText rich>{text}</MarkdownText>
-            </div>
-          </div>
+          {form ? (
+            <section aria-label={t("form.answers")} className="flex flex-col gap-2">
+              <p className="text-xs opacity-80">{t("form.editorHint", { title: form.title || form.filename })}</p>
+              <FieldEditor
+                fields={form.fields}
+                values={shownAnswers}
+                readOnly={!isNewest}
+                onChange={(next) => {
+                  if (answers === null) setBufferBase(newest.version_no);
+                  setAnswers(next);
+                }}
+              />
+            </section>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <button type="button" className={tabClass(tab === "edit")} onClick={() => setTab("edit")}>
+                  {t("edit")}
+                </button>
+                <button type="button" className={tabClass(tab === "preview")} onClick={() => setTab("preview")}>
+                  {t("preview")}
+                </button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <textarea
+                  aria-label={t("edit")}
+                  className={`min-h-[28rem] rounded border p-3 font-mono text-sm ${tab === "edit" ? "" : "hidden"} md:block`}
+                  value={text}
+                  readOnly={!isNewest}
+                  onChange={(e) => {
+                    if (buffer === null) setBufferBase(newest.version_no);
+                    setBuffer(e.target.value);
+                  }}
+                />
+                <div
+                  aria-label={t("preview")}
+                  className={`min-h-[28rem] overflow-auto rounded border p-3 ${tab === "preview" ? "" : "hidden"} md:block`}
+                >
+                  <MarkdownText rich>{text}</MarkdownText>
+                </div>
+              </div>
+            </>
+          )}
           {isNewest && (
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" onClick={saveEdit} disabled={!dirty || save.busy} aria-busy={save.busy}>
+              <Button size="sm" onClick={saveEdit} disabled={!dirty || tooLong || save.busy} aria-busy={save.busy}>
                 {save.busy && <Spinner aria-hidden />}
                 {t("save")}
               </Button>
@@ -393,6 +431,17 @@ export function DraftEditor({ id }: { id: string }) {
 
       <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
         <Section icon={FileText} accent="slate" title={t("basedOn")}>
+          {form && (
+            <p className="text-sm">
+              <span className="font-medium">{t("form.fills")}: </span>
+              {form.title || form.filename}
+              <span className="block text-xs opacity-70">
+                {form.template_id === null ? t("form.oneOff", { file: form.filename }) : form.filename}
+                {" · "}
+                {t("form.fixed")}
+              </span>
+            </p>
+          )}
           {panel ? (
             <InputsEditor
               state={panel}

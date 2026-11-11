@@ -64,6 +64,43 @@ export type ReviseInputs = {
   extra_guides: UploadFile[];
 };
 
+/** One place of a form the AI fills. key: "m:<name>" a {{name}} marker, "a:<where>" a blank
+ * the server found, "c:<where>" a tick-box group. */
+export type FormField = {
+  key: string;
+  label: string;
+  kind: "text" | "choice";
+  source: "marker" | "auto";
+  where: string;
+  options: string[];
+  multi: boolean;
+  hint: string;
+};
+
+/** A field's answer: text, or the picked options of a tick-box group. */
+export type FieldValue = string | string[];
+export type Answers = Record<string, FieldValue>;
+
+/** The form a draft fills, copied when the draft was made. template_id null = a one-off file. */
+export type DraftTemplate = { template_id: number | null; title: string; filename: string; fields: FormField[] };
+
+/** An admin's blank form in the library; only "ready" ones are offered. */
+export type FormTemplate = {
+  id: number;
+  title: string;
+  doc_type: string;
+  filename: string;
+  is_global: boolean;
+  status: "review" | "ready";
+  source_ids: number[];
+  fields: FormField[];
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+};
+
+export type FieldEdit = { key: string; label: string; hint: string; multi: boolean };
+
 export type Draft = {
   id: string;
   title: string;
@@ -74,6 +111,7 @@ export type Draft = {
   ai_override_source_ids: number[];
   created_at: string;
   updated_at: string;
+  template?: DraftTemplate | null; // null = a Markdown draft (older servers send nothing)
 };
 
 export type DraftVersion = {
@@ -83,6 +121,7 @@ export type DraftVersion = {
   instruction: string;
   created_at: string;
   inputs?: VersionInputs | null;
+  fields?: Answers | null; // template drafts: one answer per field key
 };
 
 export type DraftDetail = { draft: Draft; versions: DraftVersion[]; guides: Guide[] };
@@ -96,6 +135,9 @@ export type NewDraft = {
   extra_guides: UploadFile[];
   instruction: string;
   ai_override_source_ids: number[];
+  // A form to fill: one from the list, or a one-off .docx (not both).
+  template_id?: number | null;
+  template_file?: UploadFile | null;
 };
 
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
@@ -105,11 +147,14 @@ export const MAX_EXTRA_GUIDES = 3;
 export const MAX_GUIDE_BYTES = 5_000_000;
 export const MAX_INSTRUCTION_CHARS = 2_000;
 export const GUIDE_TYPES = [".pdf", ".hwp", ".hwpx", ".docx", ".md", ".txt"];
+export const MAX_ANSWER_CHARS = 4_000;
+
+const sourceQuery = (sourceIds: number[]) => sourceIds.map((s) => `source_id=${s}`).join("&");
 
 export const docgenApi = {
   status: () => apiFetch<DocgenStatus>("/docgen/status"),
   defaultGuides: (sourceIds: number[]) =>
-    apiFetch<Guide[]>(`/docgen/guides?${sourceIds.map((s) => `source_id=${s}`).join("&")}`),
+    apiFetch<Guide[]>(`/docgen/guides?${sourceQuery(sourceIds)}`),
   create: (body: NewDraft) => apiFetch<DraftDetail>("/docgen/drafts", json("POST", body)),
   list: () => apiFetch<Draft[]>("/docgen/drafts"),
   get: (id: string) => apiFetch<DraftDetail>(`/docgen/drafts/${id}`),
@@ -119,6 +164,16 @@ export const docgenApi = {
       `/docgen/drafts/${id}/markdown`,
       json("PUT", { markdown, base_version_no: baseVersionNo }),
     ),
+  // A template draft's hand edit: its answers instead of markdown.
+  saveFields: (id: string, fields: Answers, baseVersionNo: number) =>
+    apiFetch<DraftVersion>(
+      `/docgen/drafts/${id}/markdown`,
+      json("PUT", { fields, base_version_no: baseVersionNo }),
+    ),
+  templates: (sourceIds: number[]) => apiFetch<FormTemplate[]>(`/docgen/templates?${sourceQuery(sourceIds)}`),
+  // The fields the server finds in a one-off form; nothing is stored or counted.
+  checkTemplate: (file: UploadFile) =>
+    apiFetch<{ filename: string; fields: FormField[] }>("/docgen/templates/check", json("POST", { file })),
   // inputs: new documents and guides from the side panel; omitted = the draft's current ones.
   revise: (id: string, instruction: string, aiOverrideSourceIds: number[] = [], inputs?: ReviseInputs) =>
     apiFetch<DraftVersion>(
@@ -149,7 +204,53 @@ export const docgenApi = {
     apiFetch<void>(`/admin/sources/${sourceId}/guides/${guideId}`, { method: "PUT" }),
   unlinkGuide: (sourceId: number, guideId: number) =>
     apiFetch<void>(`/admin/sources/${sourceId}/guides/${guideId}`, { method: "DELETE" }),
+
+  // admin: form templates
+  adminTemplates: (includeArchived = false) =>
+    apiFetch<FormTemplate[]>(`/admin/templates?include_archived=${includeArchived}`),
+  createTemplate: (title: string, docType: string, file: UploadFile) =>
+    apiFetch<FormTemplate>("/admin/templates", json("POST", { title, doc_type: docType, file })),
+  detectedFields: (id: number) => apiFetch<FormField[]>(`/admin/templates/${id}/detected`),
+  saveTemplateFields: (id: number, fields: FieldEdit[]) =>
+    apiFetch<FormTemplate>(`/admin/templates/${id}/fields`, json("PUT", { fields })),
+  updateTemplate: (id: number, body: { title?: string; doc_type?: string; is_global?: boolean }) =>
+    apiFetch<FormTemplate>(`/admin/templates/${id}`, json("PATCH", body)),
+  replaceTemplateFile: (id: number, file: UploadFile) =>
+    apiFetch<FormTemplate>(`/admin/templates/${id}/file`, json("PUT", { file })),
+  setTemplateSources: (id: number, sourceIds: number[]) =>
+    apiFetch<FormTemplate>(`/admin/templates/${id}/sources`, json("PUT", { source_ids: sourceIds })),
+  archiveTemplate: (id: number) => apiFetch<void>(`/admin/templates/${id}`, { method: "DELETE" }),
 };
+
+/** Why a chosen form file cannot be sent, as a message key; null when it is fine. The server
+ * checks again and says more (macros, a damaged file). */
+export function templateFileProblem(file: File): "type" | "size" | "empty" | null {
+  if (!file.name.toLowerCase().endsWith(".docx")) return "type";
+  if (file.size === 0) return "empty";
+  if (file.size > MAX_GUIDE_BYTES) return "size";
+  return null;
+}
+
+/** The picked options of a tick-box answer. */
+export function pickedOf(v: FieldValue | undefined): string[] {
+  if (v === undefined) return [];
+  return typeof v === "string" ? (v ? [v] : []) : v;
+}
+
+/** Two answer sets are the same (order of picked options counts, as on the server). */
+export function sameAnswers(a: Answers, b: Answers): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    const x = a[k];
+    const y = b[k];
+    if (Array.isArray(x) || Array.isArray(y)) {
+      if (!Array.isArray(x) || !Array.isArray(y) || x.length !== y.length || x.some((o, i) => o !== y[i])) return false;
+    } else if (x !== y) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /** A file from an <input type="file"> as base64 (the API takes files inside JSON). */
 export async function toUpload(file: File): Promise<UploadFile> {

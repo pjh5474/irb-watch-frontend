@@ -87,6 +87,7 @@ vi.mock("@/lib/api/docgen", async () => {
     ...actual,
     docgenApi: {
       status: async () => ({ enabled: true, used: 1, limit: 10, reason: null }),
+      templates: async () => [],
       defaultGuides: (ids: number[]) =>
         state.guidesPending
           ? new Promise(() => {})

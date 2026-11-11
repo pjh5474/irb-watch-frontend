@@ -3,7 +3,7 @@ import { CountUp } from "@/components/count-up";
 import { recentCutoff, RECENT_DAYS } from "@/lib/recent";
 import { createClient } from "@/lib/supabase/server";
 
-type SourceRef = { id: number; is_active: boolean; last_scan_at: string | null };
+type SourceRef = { id: number; is_active: boolean; last_scan_at: string | null; adapter?: string };
 
 function Tile({
   label,
@@ -52,8 +52,9 @@ export async function Dashboard({ sources }: { sources: SourceRef[] | null }) {
 
   const watched = sources === null ? null : sources.filter((s) => s.is_active).length;
   // The newest scan among the sources that are still watched (compared as dates, not text).
+  // A manual source's date is its last upload, not a scan, so it is left out.
   const scanTimes = (sources ?? [])
-    .filter((s) => s.is_active && s.last_scan_at !== null)
+    .filter((s) => s.is_active && s.last_scan_at !== null && s.adapter !== "manual")
     .map((s) => Date.parse(s.last_scan_at as string))
     .filter((ms) => !Number.isNaN(ms));
   const lastScan = scanTimes.length > 0 ? new Date(Math.max(...scanTimes)).toISOString() : undefined;

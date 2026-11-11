@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
+import type { UploadFile } from "@/lib/api/docgen";
 
 // Admin endpoints of the backend. Typed by hand because the generated API types
 // (`npm run gen:api-types`) do not include the study routes until the backend that has them
@@ -45,12 +46,43 @@ export type ReviewItem = {
   file_warning: boolean;
 };
 
+/** What a manual upload did: new | updated | resaved | details (only the date) | removed | reappeared. */
+export type ManualResult = { document_id: number; change: string; version_no: number; warnings: string[] };
+
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 
 export const adminApi = {
   sources: () => apiFetch<AdminSource[]>("/admin/sources"),
   createSource: (body: { name: string; url: string; login_user?: string | null }) =>
     apiFetch<AdminSource>("/admin/sources", json("POST", body)),
+  // A source an admin fills by hand (no e-IRB site); never scanned.
+  createManualSource: (body: { name: string; members_only: boolean; ai_enabled?: boolean | null }) =>
+    apiFetch<AdminSource>("/admin/sources/manual", json("POST", body)),
+  manualCreateDocument: (
+    sourceId: number,
+    body: { title: string; note: string; posted_on: string | null; files: UploadFile[] },
+  ) => apiFetch<ManualResult>(`/admin/sources/${sourceId}/manual-documents`, json("POST", body)),
+  // title / note null keep the current ones; posted_on null keeps the date, "" clears it.
+  manualAddVersion: (
+    sourceId: number,
+    documentId: number,
+    body: {
+      title: string | null;
+      note: string | null;
+      posted_on: string | null;
+      keep_files: string[];
+      files: UploadFile[];
+    },
+  ) =>
+    apiFetch<ManualResult>(
+      `/admin/sources/${sourceId}/manual-documents/${documentId}/versions`,
+      json("POST", body),
+    ),
+  manualSetRemoved: (sourceId: number, documentId: number, removed: boolean) =>
+    apiFetch<ManualResult>(
+      `/admin/sources/${sourceId}/manual-documents/${documentId}/${removed ? "remove" : "restore"}`,
+      { method: "POST" },
+    ),
   updateSource: (
     id: number,
     body: Partial<{ name: string; is_active: boolean; login_user: string; ai_enabled: boolean }>,

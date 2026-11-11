@@ -22,7 +22,15 @@ export type HealthInput = {
   // needs_review (a rejected login sets that status as well).
   scan_in_progress?: boolean;
   scans_paused_reason?: string | null;
+  // "manual": filled by hand by an admin and never scanned, so it is never "stale".
+  adapter?: string;
 };
+
+export const MANUAL_ADAPTER = "manual";
+
+export function isManual(s: { adapter?: string | null }): boolean {
+  return s.adapter === MANUAL_ADAPTER;
+}
 
 export function sourceHealth(
   s: HealthInput,
@@ -34,6 +42,7 @@ export function sourceHealth(
   if (s.last_scan_status === "needs_review") return { level: "problem", reason: "needsReview" };
   if (s.last_scan_status === "failed") return { level: "attention", reason: "failed" };
   if (s.last_scan_at === null) return { level: "idle", reason: null };
+  if (isManual(s)) return { level: "ok", reason: null };
 
   const last = Date.parse(s.last_scan_at);
   if (Number.isNaN(last) || now - last > STALE_HOURS * 60 * 60 * 1000) {

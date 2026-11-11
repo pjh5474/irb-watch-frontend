@@ -9,12 +9,14 @@ import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
 import { SourceGuides } from "@/components/admin/guide-library";
 import { HealthLight } from "@/components/admin/health-light";
+import { ManualDocuments } from "@/components/admin/manual-documents";
 import { LOGINS_KEY, LoginBadge, loginStateOf, useStoredLogins } from "@/components/admin/login-badge";
 import { Section } from "@/components/admin/section";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
 import { adminApi, isRbaySite, loginSite, type AdminSource } from "@/lib/api/admin";
+import { isManual } from "@/lib/source-health";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 type Message = { kind: "ok" | "error"; text: string } | null;
@@ -57,7 +59,16 @@ export function AdminSource({ id }: { id: number }) {
         </p>
       )}
       {query.data && !source && <p className="text-sm">{t("sourceNotFound")}</p>}
-      {source && (
+      {source && isManual(source) && (
+        <>
+          <Settings source={source} />
+          <ManualDocuments source={source} />
+          <AiSwitch source={source} />
+          {source.requires_login && <Members source={source} />}
+          <SourceGuides sourceId={source.id} />
+        </>
+      )}
+      {source && !isManual(source) && (
         <>
           <Settings source={source} />
           <AiSwitch source={source} />
@@ -85,6 +96,7 @@ function Settings({ source }: { source: AdminSource }) {
   const logins = useStoredLogins([source]);
   const [name, setName] = useState(source.name);
   const [message, setMessage] = useState<Message>(null);
+  const manual = isManual(source);
 
   async function act(action: () => Promise<unknown>, done: string) {
     setMessage(null);
@@ -108,21 +120,37 @@ function Settings({ source }: { source: AdminSource }) {
       aside={
         <>
           {source.requires_login ? <Badge tone="warn">{t("membersOnly")}</Badge> : <Badge>{t("public")}</Badge>}
-          <LoginBadge state={loginStateOf(source, logins)} error={logins.error} />
+          {manual ? (
+            <Badge>{t("manual.badge")}</Badge>
+          ) : (
+            <LoginBadge state={loginStateOf(source, logins)} error={logins.error} />
+          )}
           {!source.is_active && <Badge>{t("inactive")}</Badge>}
         </>
       }
     >
       <HealthLight source={source} />
-      <p className="break-all text-xs opacity-70">{source.url}</p>
-      <p className="text-xs opacity-70">
-        {source.last_scan_at
-          ? t("lastScan", {
-              date: format.dateTime(new Date(source.last_scan_at), { dateStyle: "medium", timeStyle: "short" }),
-              status: source.last_scan_status ?? "?",
-            })
-          : t("neverScanned")}
-      </p>
+      {manual ? (
+        <p className="text-xs opacity-70">
+          {source.last_scan_at
+            ? t("manual.lastUpload", {
+                date: format.dateTime(new Date(source.last_scan_at), { dateStyle: "medium", timeStyle: "short" }),
+              })
+            : t("manual.noUploadYet")}
+        </p>
+      ) : (
+        <>
+          <p className="break-all text-xs opacity-70">{source.url}</p>
+          <p className="text-xs opacity-70">
+            {source.last_scan_at
+              ? t("lastScan", {
+                  date: format.dateTime(new Date(source.last_scan_at), { dateStyle: "medium", timeStyle: "short" }),
+                  status: source.last_scan_status ?? "?",
+                })
+              : t("neverScanned")}
+          </p>
+        </>
+      )}
       {source.scans_paused_reason && (
         <p role="alert" className="text-sm text-amber-800 dark:text-amber-200">
           {t("paused", { reason: source.scans_paused_reason })}
@@ -162,15 +190,17 @@ function Settings({ source }: { source: AdminSource }) {
         >
           {source.is_active ? t("deactivate") : t("activate")}
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={flight.busy || source.scan_in_progress}
-          onClick={() => void act(() => adminApi.scanSource(source.id), t("scanStarted", { name: source.name }))}
-        >
-          {source.scan_in_progress && <Spinner aria-hidden />}
-          {source.scan_in_progress ? t("scanning") : t("scanNow")}
-        </Button>
+        {!manual && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={flight.busy || source.scan_in_progress}
+            onClick={() => void act(() => adminApi.scanSource(source.id), t("scanStarted", { name: source.name }))}
+          >
+            {source.scan_in_progress && <Spinner aria-hidden />}
+            {source.scan_in_progress ? t("scanning") : t("scanNow")}
+          </Button>
+        )}
       </div>
       <Note message={message} />
     </Section>

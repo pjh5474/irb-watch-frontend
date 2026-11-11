@@ -13,6 +13,7 @@ type SourceRef = {
   is_active: boolean;
   last_scan_at: string | null;
   last_scan_status: string | null;
+  adapter?: string; // "manual": filled by hand, never "may be old"
 };
 
 // More new documents than this in one period is not expected; the count says "at least" then.

@@ -5,7 +5,7 @@ import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
 import { parsePage } from "@/lib/paging";
 import { RECENT_DAYS, recentCutoff, wantsOnlyNew } from "@/lib/recent";
-import { dataMayBeOld, sourceHealth } from "@/lib/source-health";
+import { dataMayBeOld, isManual, sourceHealth } from "@/lib/source-health";
 import { createClient } from "@/lib/supabase/server";
 
 // One source's documents stay 50 per page (the owner asked for 10 on the other lists).
@@ -32,7 +32,7 @@ export default async function SourcePage({
 
   const { data: source, error: sourceError } = await supabase
     .from("sources")
-    .select("id, name, requires_login, is_active, last_scan_at, last_scan_status")
+    .select("id, name, adapter, requires_login, is_active, last_scan_at, last_scan_status")
     .eq("id", sourceId)
     .maybeSingle();
   if (sourceError) {
@@ -83,14 +83,20 @@ export default async function SourcePage({
       <div className="flex flex-wrap gap-3 text-sm opacity-70">
         {!source.is_active && <span>{t("inactive")}</span>}
         <span>
-          {source.last_scan_at
-            ? t("lastScan", {
-                date: format.dateTime(new Date(source.last_scan_at), {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                }),
-              })
-            : t("neverScanned")}
+          {isManual(source)
+            ? source.last_scan_at
+              ? t("manualUpdated", {
+                  date: format.dateTime(new Date(source.last_scan_at), { dateStyle: "medium", timeStyle: "short" }),
+                })
+              : t("manualEmpty")
+            : source.last_scan_at
+              ? t("lastScan", {
+                  date: format.dateTime(new Date(source.last_scan_at), {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }),
+                })
+              : t("neverScanned")}
         </span>
       </div>
     </header>

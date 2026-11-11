@@ -35,7 +35,7 @@ export default async function FeedPage({
   // Explicit safe columns: RLS cannot hide sources.config / last_scan_error from users.
   const { data: sources, error: sourcesError } = await supabase
     .from("sources")
-    .select("id, name, is_active, last_scan_at, last_scan_status")
+    .select("id, name, adapter, is_active, last_scan_at, last_scan_status")
     .order("name");
   const names = new Map((sources ?? []).map((s) => [s.id, s.name]));
 

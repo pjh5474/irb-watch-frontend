@@ -101,9 +101,14 @@ export default async function DocumentPage({
         <div className="flex flex-wrap gap-3 text-sm opacity-70">
           {document.posted_on && <span>{document.posted_on}</span>}
           {document.status === "removed" && <span>{t("removed")}</span>}
-          <a href={document.source_url} target="_blank" rel="noopener noreferrer" className="underline">
-            {t("original")}
-          </a>
+          {/* A document of a manual source has no page on a hospital site. */}
+          {document.source_url ? (
+            <a href={document.source_url} target="_blank" rel="noopener noreferrer" className="underline">
+              {t("original")}
+            </a>
+          ) : (
+            <span>{t("uploadedByHand")}</span>
+          )}
           {/* Pin a version only when an older one is open; otherwise the draft uses the newest. */}
           <Link
             href={`/drafts/new?document=${documentId}${index > 0 ? `&v=${selected.version_no}` : ""}`}
@@ -189,9 +194,13 @@ export default async function DocumentPage({
           <h3 className="font-medium">{t("references")}</h3>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             <li>
-              <a href={document.source_url} target="_blank" rel="noopener noreferrer" className="underline">
-                {t("original")}
-              </a>
+              {document.source_url ? (
+                <a href={document.source_url} target="_blank" rel="noopener noreferrer" className="underline">
+                  {t("original")}
+                </a>
+              ) : (
+                <span>{t("uploadedByHand")}</span>
+              )}
               <span className="opacity-70"> · {document.title}</span>
             </li>
             {files.map((f) => (

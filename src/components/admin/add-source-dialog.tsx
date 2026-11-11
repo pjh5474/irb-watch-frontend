@@ -8,11 +8,14 @@ import { Spinner } from "@/components/ui/spinner";
 import { adminApi } from "@/lib/api/admin";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
-/** The "add a source" form in a dialog, so the list of sources starts at the top of the page. */
+/** The "add a source" form in a dialog, so the list of sources starts at the top of the page.
+ * Two kinds: a site that is scanned (its web address), or a manual source for a hospital with
+ * no e-IRB site, whose documents an admin uploads by hand. */
 export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (name: string) => void }) {
   const t = useTranslations("admin");
   const add = useSingleFlight();
-  const [form, setForm] = useState({ name: "", url: "", login: "" });
+  const [kind, setKind] = useState<"site" | "manual">("site");
+  const [form, setForm] = useState({ name: "", url: "", login: "", membersOnly: false });
   const [error, setError] = useState<string | null>(null);
   const first = useRef<HTMLInputElement>(null);
 
@@ -30,7 +33,11 @@ export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onA
     setError(null);
     await add.run(async () => {
       try {
-        await adminApi.createSource({ name: form.name, url: form.url, login_user: form.login.trim() || null });
+        if (kind === "manual") {
+          await adminApi.createManualSource({ name: form.name, members_only: form.membersOnly });
+        } else {
+          await adminApi.createSource({ name: form.name, url: form.url, login_user: form.login.trim() || null });
+        }
         onAdded(form.name);
       } catch (e) {
         setError(adminErrorText(e, t));
@@ -51,6 +58,23 @@ export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onA
           <h2 id="add-source-title" className="text-lg font-medium">
             {t("addTitle")}
           </h2>
+          <fieldset className="flex flex-col gap-1 text-sm">
+            <legend className="mb-1">{t("sourceKind")}</legend>
+            <label className="flex items-start gap-2">
+              <input type="radio" className="mt-1" checked={kind === "site"} onChange={() => setKind("site")} />
+              <span>
+                {t("kindSite")}
+                <span className="block text-xs opacity-70">{t("kindSiteHint")}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input type="radio" className="mt-1" checked={kind === "manual"} onChange={() => setKind("manual")} />
+              <span>
+                {t("kindManual")}
+                <span className="block text-xs opacity-70">{t("kindManualHint")}</span>
+              </span>
+            </label>
+          </fieldset>
           <label className="flex flex-col gap-1 text-sm">
             {t("name")}
             <input
@@ -61,28 +85,45 @@ export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onA
               required
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {t("url")}
-            <input
-              className="rounded border px-3 py-2"
-              value={form.url}
-              onChange={(e) => setForm({ ...form, url: e.target.value })}
-              placeholder="https://hrpp.snuh.org/hrpp/bbs/list.do?key=2605277031"
-              required
-            />
-            <span className="text-xs opacity-70">{t("urlHint")}</span>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {t("loginLabel")}
-            <input
-              className="rounded border px-3 py-2"
-              value={form.login}
-              onChange={(e) => setForm({ ...form, login: e.target.value })}
-              placeholder="study-1"
-              autoComplete="off"
-            />
-            <span className="text-xs opacity-70">{t("loginLabelHint")}</span>
-          </label>
+          {kind === "site" ? (
+            <>
+              <label className="flex flex-col gap-1 text-sm">
+                {t("url")}
+                <input
+                  className="rounded border px-3 py-2"
+                  value={form.url}
+                  onChange={(e) => setForm({ ...form, url: e.target.value })}
+                  placeholder="https://hrpp.snuh.org/hrpp/bbs/list.do?key=2605277031"
+                  required
+                />
+                <span className="text-xs opacity-70">{t("urlHint")}</span>
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                {t("loginLabel")}
+                <input
+                  className="rounded border px-3 py-2"
+                  value={form.login}
+                  onChange={(e) => setForm({ ...form, login: e.target.value })}
+                  placeholder="study-1"
+                  autoComplete="off"
+                />
+                <span className="text-xs opacity-70">{t("loginLabelHint")}</span>
+              </label>
+            </>
+          ) : (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={form.membersOnly}
+                onChange={(e) => setForm({ ...form, membersOnly: e.target.checked })}
+              />
+              <span>
+                {t("manualMembersOnly")}
+                <span className="block text-xs opacity-70">{t("manualMembersOnlyHint")}</span>
+              </span>
+            </label>
+          )}
           {error && (
             <p role="alert" className="text-sm text-red-600">
               {error}

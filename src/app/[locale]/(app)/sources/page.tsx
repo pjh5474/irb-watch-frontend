@@ -4,7 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
 import { clampPage, pageCount, pageRange, parsePage } from "@/lib/paging";
 import { siteOf } from "@/lib/site-groups";
-import { dataMayBeOld, sourceHealth } from "@/lib/source-health";
+import { dataMayBeOld, isManual, sourceHealth } from "@/lib/source-health";
 import { createClient } from "@/lib/supabase/server";
 
 // 24 cards fill whole rows of 2, 3 and 4 columns.
@@ -34,7 +34,7 @@ export default async function SourcesPage({
   // last_scan_error from users.
   const { data: all, error } = await supabase
     .from("sources")
-    .select("id, name, url, requires_login, is_active, last_scan_at, last_scan_status")
+    .select("id, name, url, adapter, requires_login, is_active, last_scan_at, last_scan_status")
     .order("name");
   const access = await getAccessState(supabase);
   const { data: projects } = await supabase
@@ -162,7 +162,9 @@ export default async function SourcesPage({
                   {source.name}
                 </Link>
               </h2>
-              <p className="text-xs opacity-60">{site.kind === "rbay" ? "R-BAY" : site.fallback}</p>
+              <p className="text-xs opacity-60">
+                {isManual(source) ? t("manualTag") : site.kind === "rbay" ? "R-BAY" : site.fallback}
+              </p>
               <div className="flex flex-wrap items-center gap-1 text-xs">
                 {locked ? (
                   <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800">{t("locked")}</span>
@@ -187,10 +189,10 @@ export default async function SourcesPage({
               </div>
               <p className="mt-auto text-xs opacity-70">
                 {source.last_scan_at
-                  ? t("lastScan", {
+                  ? t(isManual(source) ? "manualUpdated" : "lastScan", {
                       date: format.dateTime(new Date(source.last_scan_at), { dateStyle: "medium", timeStyle: "short" }),
                     })
-                  : t("neverScanned")}
+                  : t(isManual(source) ? "manualEmpty" : "neverScanned")}
               </p>
             </li>
           );

@@ -6,7 +6,9 @@ import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "../messages/en.json";
 import ko from "../messages/ko.json";
-import { DraftEditor, sourcesNeedingAgreement } from "../src/components/drafts/draft-editor";
+import { choiceOf, newChosen, sendsNothing, sourcesNeedingAgreement } from "../src/components/drafts/document-picker";
+import { DraftEditor } from "../src/components/drafts/draft-editor";
+import { panelGuides, startPanel } from "../src/components/drafts/inputs-panel";
 import { buildRequest, NewDraft } from "../src/components/drafts/new-draft";
 import { ApiError, apiFetch, filenameFrom } from "../src/lib/api/client";
 import { elapsed, guideFileProblem, type DraftDetail } from "../src/lib/api/docgen";
@@ -55,7 +57,19 @@ vi.mock("@/lib/draft-picker", () => ({
     sourceId === 1
       ? [{ id: 10, title: "Consent form", posted_on: "2026-11-01", source_id: 1 }]
       : [{ id: 30, title: "Study protocol", posted_on: null, source_id: 3 }],
-  pickerVersions: async () => [{ version_no: 2, created_at: "2026-11-02" }, { version_no: 1, created_at: "2026-11-01" }],
+  pickerVersions: async () => [
+    { version_no: 3, created_at: "2026-11-03" },
+    { version_no: 2, created_at: "2026-11-02" },
+    { version_no: 1, created_at: "2026-11-01" },
+  ],
+  pickerFiles: async (_id: number, versionNo: number | null) =>
+    versionNo === 1
+      ? [{ filename: "old.pdf", no_text: false }]
+      : [
+          { filename: "consent.hwp", no_text: false },
+          { filename: "protocol.pdf", no_text: true },
+        ],
+  pickerTitles: async (ids: number[]) => new Map(ids.map((i) => [i, `Title ${i}`])),
 }));
 
 vi.mock("@/lib/api/docgen", async () => {
@@ -146,7 +160,7 @@ afterEach(() => {
 
 describe("helpers", () => {
   it("sends null guide_ids unless the user unticked one", () => {
-    const chosen = [{ id: 10, title: "a", source_id: 1, version_no: null }];
+    const chosen = [newChosen({ id: 10, title: "a", source_id: 1, version_no: null })];
     expect(buildRequest(chosen, [5, 6], new Set(), new Set(), []).guide_ids).toBeNull();
     expect(buildRequest(chosen, [5, 6], new Set([6]), new Set(), []).guide_ids).toEqual([5]);
     expect(buildRequest(chosen, [5], new Set([5]), new Set(), []).guide_ids).toEqual([]);
@@ -176,12 +190,38 @@ describe("helpers", () => {
   });
 
   it("asks again for AI-off sources not allowed when the draft was made", () => {
-    const d = structuredClone(DETAIL);
-    d.draft.documents.push({ document_id: 30, version_no: 1, source_id: 3 });
     const flags = new Map([[1, true], [3, false]]);
-    expect(sourcesNeedingAgreement(d, flags)).toEqual([3]);
-    d.draft.ai_override_source_ids = [3];
-    expect(sourcesNeedingAgreement(d, flags)).toEqual([]);
+    expect(sourcesNeedingAgreement([1, 3, 3], [], flags)).toEqual([3]);
+    expect(sourcesNeedingAgreement([1, 3], [3], flags)).toEqual([]);
+  });
+
+  it("sends the chosen files, page text and comparison of each document", () => {
+    const c = { ...newChosen({ id: 10, title: "a", source_id: 1, version_no: 3 }), files: ["b.pdf"], compare_with: 1 };
+    expect(choiceOf(c)).toEqual({ document_id: 10, version_no: 3, files: ["b.pdf"], page_text: true, compare_with: 1, compare: true });
+    // "no comparison" drops the version number
+    expect(choiceOf({ ...c, compare: false }).compare_with).toBeNull();
+  });
+
+  it("a document that would send nothing is caught", () => {
+    const c = newChosen({ id: 10, title: "a", source_id: 1, version_no: null });
+    expect(sendsNothing(c, 2)).toBe(false);
+    expect(sendsNothing({ ...c, page_text: false }, 2)).toBe(false);
+    expect(sendsNothing({ ...c, page_text: false }, 0)).toBe(true);
+    expect(sendsNothing({ ...c, page_text: false, files: [] }, undefined)).toBe(true);
+  });
+
+  it("the side panel ticks the draft's guides and a new source's guides, not ones the user left out", () => {
+    const d = structuredClone(DETAIL);
+    d.guides = [];
+    d.draft.guide_ids = [];
+    const g = (id: number) => ({ id, title: `G${id}`, filename: "", chars: 1, source_ids: [], created_at: "", archived_at: null });
+    const state = startPanel(d, new Map([[10, "Consent form"]]));
+    expect(state.chosen[0]).toMatchObject({ id: 10, title: "Consent form", files: null, page_text: true });
+    // guide 5 was a default the user left out; guide 7 comes with a newly added source
+    const list = panelGuides(state, d, [g(5), g(7)], new Set([5]));
+    expect(list.map((x) => [x.guide.id, x.ticked])).toEqual([[5, false], [7, true]]);
+    state.toggled.set(5, true);
+    expect(panelGuides(state, d, [g(5), g(7)], new Set([5]))[0].ticked).toBe(true);
   });
 });
 
@@ -251,6 +291,36 @@ describe("NewDraft", () => {
     await screen.findByRole("option", { name: "Version 2" });
     expect(select.value).toBe("7");
     expect(screen.getByRole("option", { name: "Version 7 (chosen)" })).toBeTruthy();
+  });
+
+  it("sends only the ticked files and the chosen comparison", async () => {
+    show(<NewDraft initial={{ id: 10, title: "Consent form", source_id: 1, version_no: null }} />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /protocol\.pdf/ }));
+    expect(screen.getByText("no text; only its name is sent")).toBeTruthy();
+    const compare = screen.getByLabelText("Changes listed against") as HTMLSelectElement;
+    await screen.findByRole("option", { name: "Changes since version 1" });
+    // version 2 is "the version before" of the newest (3), so it is not listed twice
+    expect(screen.queryByRole("option", { name: "Changes since version 2" })).toBeNull();
+    fireEvent.change(compare, { target: { value: "1" } });
+    await screen.findByText("SNUH guide");
+    fireEvent.click(screen.getByRole("button", { name: "Write the draft" }));
+    await waitFor(() => expect(state.created).toHaveLength(1));
+    expect(state.created[0]).toMatchObject({
+      documents: [{ document_id: 10, version_no: null, files: ["consent.hwp"], page_text: true, compare_with: 1, compare: true }],
+    });
+  });
+
+  it("unticking everything blocks the send and says why; another version ticks all files again", async () => {
+    show(<NewDraft initial={{ id: 10, title: "Consent form", source_id: 1, version_no: null }} />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /consent\.hwp/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /protocol\.pdf/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Page text (the post itself)" }));
+    expect(await screen.findByText("Tick the page text or at least one file.")).toBeTruthy();
+    await screen.findByText("SNUH guide");
+    expect((screen.getByRole("button", { name: "Write the draft" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Versions"), { target: { value: "1" } });
+    const old = (await screen.findByRole("checkbox", { name: /old\.pdf/ })) as HTMLInputElement;
+    expect(old.checked).toBe(true);
   });
 
   it("shows the server's reason when writing fails", async () => {
@@ -328,6 +398,41 @@ describe("DraftEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revise" }));
     await waitFor(() => expect(state.revised).toEqual([["d-1", "shorter", []]]));
     expect(await screen.findByText("The AI's revision is version 3.")).toBeTruthy();
+  });
+
+  it("the side panel shows the draft's documents and sends changed ones with the revision", async () => {
+    show(<DraftEditor id="d-1" />);
+    expect(await screen.findByText("Title 10")).toBeTruthy();
+    expect(screen.getByText("All files")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Change documents and guides" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /protocol\.pdf/ }));
+    expect(screen.getByText(/reads the documents and guides chosen in the side panel/)).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(/make section 2 shorter/), { target: { value: "use the consent only" } });
+    const revise = screen.getByRole("button", { name: "Revise" }) as HTMLButtonElement;
+    await waitFor(() => expect(revise.disabled).toBe(false));
+    fireEvent.click(revise);
+    await waitFor(() => expect(state.revised).toHaveLength(1));
+    const [, , , inputs] = state.revised[0] as [string, string, number[], Record<string, unknown>];
+    expect(inputs).toMatchObject({
+      documents: [{ document_id: 10, version_no: 2, files: ["consent.hwp"], page_text: true, compare: true }],
+      guide_ids: [5],
+      keep_extra_guides: [],
+      extra_guides: [],
+    });
+    // after the revision the panel shows the saved selection again
+    expect(await screen.findByRole("button", { name: "Change documents and guides" })).toBeTruthy();
+  });
+
+  it("shows what an AI version was written from", async () => {
+    (state.detail as DraftDetail).versions[1].inputs = {
+      documents: [{ document_id: 10, version_no: 2, source_id: 1, files: ["consent.hwp"], page_text: false, compare: false }],
+      guide_ids: [5],
+      extra_guides: ["mine.txt"],
+      ai_override_source_ids: [],
+    };
+    show(<DraftEditor id="d-1" />);
+    fireEvent.click(await screen.findByText("What version 2 was written from"));
+    expect(screen.getByText("Files: consent.hwp · without page text · No list of changes")).toBeTruthy();
   });
 
   it("a missing draft says so", async () => {

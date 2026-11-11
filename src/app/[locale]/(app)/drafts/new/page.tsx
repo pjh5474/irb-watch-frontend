@@ -1,5 +1,6 @@
 import { setRequestLocale } from "next-intl/server";
-import { NewDraft, type Chosen } from "@/components/drafts/new-draft";
+import type { InitialDoc } from "@/components/drafts/document-picker";
+import { NewDraft } from "@/components/drafts/new-draft";
 import { createClient } from "@/lib/supabase/server";
 
 // ?document=12&v=3 comes from "Draft a form from this" on a document page. The document is read
@@ -15,7 +16,7 @@ export default async function NewDraftPage({
   const { document, v } = await searchParams;
   setRequestLocale(locale);
 
-  let initial: Chosen | null = null;
+  let initial: InitialDoc | null = null;
   if (document && /^\d+$/.test(document)) {
     const supabase = await createClient();
     const { data } = await supabase

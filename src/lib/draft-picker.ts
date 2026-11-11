@@ -30,6 +30,36 @@ export async function pickerDocuments(sourceId: number, search: string): Promise
   return data ?? [];
 }
 
+export type PickerFile = { filename: string; no_text: boolean };
+
+/** The attached files of one version (null = the newest), by name. */
+export async function pickerFiles(documentId: number, versionNo: number | null): Promise<PickerFile[]> {
+  const supabase = createClient();
+  let query = supabase.from("document_versions").select("id").eq("document_id", documentId);
+  query = versionNo === null ? query.order("version_no", { ascending: false }) : query.eq("version_no", versionNo);
+  const { data: rows, error } = await query.limit(1);
+  if (error) throw new Error(error.message);
+  if (!rows?.length) return [];
+  const { data, error: fileError } = await supabase
+    .from("document_version_files")
+    .select("filename, hash_only_reason, extract_note")
+    .eq("version_id", rows[0].id)
+    .order("filename");
+  if (fileError) throw new Error(fileError.message);
+  return (data ?? []).map((f) => ({
+    filename: f.filename,
+    no_text: f.hash_only_reason !== null || f.extract_note !== null,
+  }));
+}
+
+/** Titles of documents the user may read (others are simply missing). */
+export async function pickerTitles(ids: number[]): Promise<Map<number, string>> {
+  if (ids.length === 0) return new Map();
+  const { data, error } = await createClient().from("documents").select("id, title").in("id", ids);
+  if (error) throw new Error(error.message);
+  return new Map((data ?? []).map((d) => [d.id, d.title]));
+}
+
 /** The versions users see (silent "resaved" ones are hidden, as on the document page). */
 export async function pickerVersions(documentId: number): Promise<PickerVersion[]> {
   const { data, error } = await createClient()

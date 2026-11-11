@@ -17,7 +17,37 @@ export type Guide = {
 
 export type GuideWithText = Guide & { body_text: string };
 
-export type DocRef = { document_id: number; version_no: number; source_id: number };
+/** One post to draft from. files null = every attached file; compare_with null = the version
+ * just before; compare false = no list of changes. */
+export type DocChoice = {
+  document_id: number;
+  version_no: number | null;
+  files: string[] | null;
+  page_text: boolean;
+  compare_with: number | null;
+  compare: boolean;
+};
+
+// Drafts saved before file choice have only the first three keys.
+export type DocRef = { document_id: number; version_no: number; source_id: number } & Partial<
+  Omit<DocChoice, "document_id" | "version_no">
+>;
+
+/** What one AI version was written from (null for hand edits and older versions). */
+export type VersionInputs = {
+  documents: DocRef[];
+  guide_ids: number[];
+  extra_guides: string[];
+  ai_override_source_ids: number[];
+};
+
+/** New documents and guides for a revision; they replace the draft's current ones. */
+export type ReviseInputs = {
+  documents: DocChoice[];
+  guide_ids: number[] | null;
+  keep_extra_guides: string[];
+  extra_guides: UploadFile[];
+};
 
 export type Draft = {
   id: string;
@@ -37,6 +67,7 @@ export type DraftVersion = {
   origin: "ai" | "user_edit" | "ai_revision";
   instruction: string;
   created_at: string;
+  inputs?: VersionInputs | null;
 };
 
 export type DraftDetail = { draft: Draft; versions: DraftVersion[]; guides: Guide[] };
@@ -44,7 +75,7 @@ export type DraftDetail = { draft: Draft; versions: DraftVersion[]; guides: Guid
 export type UploadFile = { filename: string; content_base64: string };
 
 export type NewDraft = {
-  documents: { document_id: number; version_no: number | null }[];
+  documents: DocChoice[];
   // null: every guide of the documents' sources. A list: exactly these.
   guide_ids: number[] | null;
   extra_guides: UploadFile[];
@@ -73,10 +104,11 @@ export const docgenApi = {
       `/docgen/drafts/${id}/markdown`,
       json("PUT", { markdown, base_version_no: baseVersionNo }),
     ),
-  revise: (id: string, instruction: string, aiOverrideSourceIds: number[] = []) =>
+  // inputs: new documents and guides from the side panel; omitted = the draft's current ones.
+  revise: (id: string, instruction: string, aiOverrideSourceIds: number[] = [], inputs?: ReviseInputs) =>
     apiFetch<DraftVersion>(
       `/docgen/drafts/${id}/revise`,
-      json("POST", { instruction, ai_override_source_ids: aiOverrideSourceIds }),
+      json("POST", { instruction, ai_override_source_ids: aiOverrideSourceIds, ...(inputs ? { inputs } : {}) }),
     ),
   exportDocx: (id: string, versionNo: number) =>
     apiFetchFile(`/docgen/drafts/${id}/export?version_no=${versionNo}`, { method: "POST" }, "draft.docx"),

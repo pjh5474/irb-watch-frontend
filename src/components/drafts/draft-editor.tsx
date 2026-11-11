@@ -1,32 +1,37 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileText, ShieldAlert, Sparkles } from "lucide-react";
+import { Download, FileText, Sparkles } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { adminErrorText } from "@/components/admin/error-text";
 import { Section } from "@/components/admin/section";
 import { DiffView } from "@/components/diff-view";
+import { AiOffBoxes, sendsNothing, sourcesNeedingAgreement } from "@/components/drafts/document-picker";
+import {
+  DocLine,
+  InputsEditor,
+  PanelButtons,
+  panelGuides,
+  reviseInputs,
+  startPanel,
+  type PanelState,
+} from "@/components/drafts/inputs-panel";
 import { MarkdownText } from "@/components/markdown-text";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
 import { ApiError, saveFile } from "@/lib/api/client";
-import { docgenApi, elapsed, MAX_INSTRUCTION_CHARS, type DraftDetail } from "@/lib/api/docgen";
+import { docgenApi, elapsed, MAX_INSTRUCTION_CHARS, type DraftDetail, type VersionInputs } from "@/lib/api/docgen";
 import { wordDiff } from "@/lib/diff";
-import { pickerSources } from "@/lib/draft-picker";
+import { pickerSources, pickerTitles } from "@/lib/draft-picker";
 import { useElapsed } from "@/lib/use-elapsed";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 type Message = { kind: "ok" | "error"; text: string } | null;
 
-/** Sources of the draft that have AI switched off now and were not allowed when it was made. */
-export function sourcesNeedingAgreement(detail: DraftDetail, aiEnabled: Map<number, boolean>): number[] {
-  const used = [...new Set(detail.draft.documents.map((d) => d.source_id))];
-  return used
-    .filter((s) => aiEnabled.get(s) === false && !detail.draft.ai_override_source_ids.includes(s))
-    .sort((a, b) => a - b);
-}
+const sourcesOf = (detail: DraftDetail | undefined) =>
+  [...new Set((detail?.draft.documents ?? []).map((d) => d.source_id))].sort((a, b) => a - b);
 
 export function DraftEditor({ id }: { id: string }) {
   const t = useTranslations("drafts");
@@ -35,6 +40,33 @@ export function DraftEditor({ id }: { id: string }) {
   const key = ["docgen", "draft", id];
   const query = useQuery({ queryKey: key, queryFn: () => docgenApi.get(id), retry: false });
   const sources = useQuery({ queryKey: ["picker", "sources"], queryFn: pickerSources });
+  const [panel, setPanel] = useState<PanelState | null>(null); // null = the draft's current inputs
+
+  // Titles of every document named by the draft or any of its versions.
+  const docIds = [
+    ...new Set(
+      [query.data?.draft.documents ?? [], ...(query.data?.versions ?? []).map((v) => v.inputs?.documents ?? [])]
+        .flat()
+        .map((d) => d.document_id),
+    ),
+  ].sort((a, b) => a - b);
+  const titles = useQuery({
+    queryKey: ["picker", "titles", docIds.join(",")],
+    queryFn: () => pickerTitles(docIds),
+    enabled: docIds.length > 0,
+  });
+  const draftSources = sourcesOf(query.data);
+  const originalDefaults = useQuery({
+    queryKey: ["docgen", "default-guides", draftSources.join(",")],
+    queryFn: () => docgenApi.defaultGuides(draftSources),
+    enabled: panel !== null && draftSources.length > 0,
+  });
+  const panelSources = [...new Set((panel?.chosen ?? []).map((c) => c.source_id))].sort((a, b) => a - b);
+  const panelDefaults = useQuery({
+    queryKey: ["docgen", "default-guides", panelSources.join(",")],
+    queryFn: () => docgenApi.defaultGuides(panelSources),
+    enabled: panel !== null && panelSources.length > 0,
+  });
 
   const save = useSingleFlight();
   const revise = useSingleFlight();
@@ -53,6 +85,7 @@ export function DraftEditor({ id }: { id: string }) {
 
   const detail = query.data;
   const names = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s.name])), [sources.data]);
+  const byId = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s])), [sources.data]);
   const aiEnabled = useMemo(
     () => new Map((sources.data ?? []).map((s) => [s.id, s.ai_enabled])),
     [sources.data],
@@ -81,8 +114,23 @@ export function DraftEditor({ id }: { id: string }) {
   const dirty = buffer !== null && buffer !== newest.markdown;
   const other = compareWith !== null ? versions.find((v) => v.version_no === compareWith) : undefined;
   const diff = other ? wordDiff(other.markdown, shown.markdown) : null;
-  const needAgree = sourcesNeedingAgreement(detail, aiEnabled);
+  const needAgree = sourcesNeedingAgreement(
+    panel ? panelSources : draftSources,
+    detail.draft.ai_override_source_ids,
+    aiEnabled,
+  );
   const missingAgree = needAgree.some((s) => !agreed.has(s));
+  const guideChoices = panel
+    ? panelGuides(panel, detail, panelDefaults.data ?? [], new Set((originalDefaults.data ?? []).map((g) => g.id)))
+    : [];
+  // The panel's guide list must be loaded before its choice is sent (see the new-draft form).
+  const panelReady =
+    panel === null ||
+    (panel.chosen.length > 0 &&
+      !panel.chosen.some((c) => sendsNothing(c, undefined)) &&
+      (draftSources.length === 0 || (originalDefaults.isSuccess && !originalDefaults.isFetching)) &&
+      (panelSources.length === 0 || (panelDefaults.isSuccess && !panelDefaults.isFetching)));
+  const titleOf = (docId: number) => titles.data?.get(docId);
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: key });
@@ -117,15 +165,19 @@ export function DraftEditor({ id }: { id: string }) {
 
   async function askRevision() {
     const request = instruction.trim();
-    if (!request || dirty || missingAgree) return;
+    if (!request || dirty || missingAgree || !panelReady) return;
     setMessage(null);
     setConflict(false);
     timer.start();
     await revise.run(async () => {
       try {
-        const v = await docgenApi.revise(id, request, needAgree.filter((s) => agreed.has(s)));
+        const allowed = needAgree.filter((s) => agreed.has(s));
+        const v = panel
+          ? await docgenApi.revise(id, request, allowed, await reviseInputs(panel, guideChoices))
+          : await docgenApi.revise(id, request, allowed);
         // Any leftover edit box (even one equal to the old text) must not hide the revision.
         dropEdits();
+        setPanel(null);
         setInstruction("");
         setViewing(null);
         setMessage({ kind: "ok", text: t("revised", { n: v.version_no }) });
@@ -155,42 +207,14 @@ export function DraftEditor({ id }: { id: string }) {
     `rounded px-3 py-1 text-sm md:hidden ${active ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900" : "border"}`;
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-6">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-6">
       <Link href="/drafts" className="text-sm underline-offset-4 hover:underline">
         {t("back")}
       </Link>
       <h1 className="text-2xl font-semibold break-words">{detail.draft.title || t("editorTitle")}</h1>
 
-      <Section icon={FileText} accent="slate" title={t("basedOn")}>
-        <ul className="flex flex-col gap-1 text-sm">
-          {detail.draft.documents.map((d) => (
-            <li key={`${d.document_id}-${d.version_no}`}>
-              <Link href={`/documents/${d.document_id}?v=${d.version_no}`} className="underline-offset-4 hover:underline">
-                {t("documentN", { id: d.document_id, n: d.version_no })}
-              </Link>
-              {names.get(d.source_id) && <span className="ml-2 opacity-60">{names.get(d.source_id)}</span>}
-            </li>
-          ))}
-        </ul>
-        <p className="text-sm">
-          <span className="font-medium">{t("guidesUsed")}: </span>
-          {detail.guides.length ? detail.guides.map((g) => g.title).join(", ") : t("noGuidesUsed")}
-        </p>
-        {detail.draft.extra_guides.length > 0 && (
-          <p className="text-sm">
-            <span className="font-medium">{t("attachedGuides")}: </span>
-            {detail.draft.extra_guides.join(", ")}
-          </p>
-        )}
-        {detail.draft.ai_override_source_ids.length > 0 && (
-          <p className="text-sm text-amber-800 dark:text-amber-200">
-            {t("aiOffUsed", {
-              names: detail.draft.ai_override_source_ids.map((s) => names.get(s) ?? `#${s}`).join(", "),
-            })}
-          </p>
-        )}
-      </Section>
-
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+      <div className="flex min-w-0 flex-col gap-4">
       <section aria-label={t("versions")} className="flex flex-col gap-2">
         <h2 className="font-medium">{t("versions")}</h2>
         <ul className="flex flex-wrap gap-2">
@@ -258,6 +282,12 @@ export function DraftEditor({ id }: { id: string }) {
             {t("viewing", { n: shown.version_no })}
             {!isNewest && ` · ${t("readOnly")}`}
           </p>
+          {shown.inputs && (
+            <details className="text-sm">
+              <summary className="cursor-pointer opacity-80">{t("versionRead", { n: shown.version_no })}</summary>
+              <InputsSummary inputs={shown.inputs} titleOf={titleOf} names={names} guides={detail.guides} />
+            </details>
+          )}
           <div className="flex gap-2">
             <button type="button" className={tabClass(tab === "edit")} onClick={() => setTab("edit")}>
               {t("edit")}
@@ -311,38 +341,21 @@ export function DraftEditor({ id }: { id: string }) {
           onChange={(e) => setInstruction(e.target.value)}
           aria-invalid={instruction.length > MAX_INSTRUCTION_CHARS}
         />
-        {needAgree.map((s) => {
-          const name = names.get(s) ?? `#${s}`;
-          return (
-            <div key={s} className="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
-              <p className="flex items-center gap-2 font-medium">
-                <ShieldAlert className="size-4" aria-hidden />
-                {t("aiOffTitle", { name })}
-              </p>
-              <p className="mt-1">{t("aiOffText")}</p>
-              <label className="mt-2 flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={agreed.has(s)}
-                  onChange={(e) => {
-                    const next = new Set(agreed);
-                    if (e.target.checked) next.add(s);
-                    else next.delete(s);
-                    setAgreed(next);
-                  }}
-                />
-                {t("aiOffAgree", { name })}
-              </label>
-            </div>
-          );
-        })}
+        <AiOffBoxes sourceIds={needAgree} names={names} agreed={agreed} onChange={setAgreed} />
         {dirty && <p className="text-xs text-amber-700">{t("reviseUnsaved")}</p>}
+        {panel && <p className="text-xs opacity-80">{t("reviseWithNewInputs")}</p>}
         <div>
           <Button
             size="sm"
             onClick={askRevision}
-            disabled={revise.busy || dirty || missingAgree || !instruction.trim() || instruction.length > MAX_INSTRUCTION_CHARS}
+            disabled={
+              revise.busy ||
+              dirty ||
+              missingAgree ||
+              !panelReady ||
+              !instruction.trim() ||
+              instruction.length > MAX_INSTRUCTION_CHARS
+            }
             aria-busy={revise.busy}
           >
             {revise.busy && <Spinner aria-hidden />}
@@ -376,6 +389,84 @@ export function DraftEditor({ id }: { id: string }) {
           )}
         </div>
       )}
+      </div>
+
+      <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
+        <Section icon={FileText} accent="slate" title={t("basedOn")}>
+          {panel ? (
+            <InputsEditor
+              state={panel}
+              onChange={setPanel}
+              sources={sources.data ?? []}
+              byId={byId}
+              guides={guideChoices}
+              extraOnDraft={detail.draft.extra_guides}
+            />
+          ) : (
+            <InputsSummary
+              inputs={{
+                documents: detail.draft.documents,
+                guide_ids: detail.draft.guide_ids,
+                extra_guides: detail.draft.extra_guides,
+                ai_override_source_ids: detail.draft.ai_override_source_ids,
+              }}
+              titleOf={titleOf}
+              names={names}
+              guides={detail.guides}
+            />
+          )}
+          <PanelButtons
+            editing={panel !== null}
+            onStart={() => setPanel(startPanel(detail, titles.data ?? new Map()))}
+            onCancel={() => setPanel(null)}
+          />
+        </Section>
+      </aside>
+      </div>
     </main>
+  );
+}
+
+function InputsSummary({
+  inputs,
+  titleOf,
+  names,
+  guides,
+}: {
+  inputs: VersionInputs;
+  titleOf: (docId: number) => string | undefined;
+  names: Map<number, string>;
+  guides: { id: number; title: string }[];
+}) {
+  const t = useTranslations("drafts");
+  const guideTitle = (g: number) => guides.find((x) => x.id === g)?.title ?? t("guideN", { id: g });
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <ul className="flex flex-col gap-2">
+        {inputs.documents.map((d) => (
+          <DocLine
+            key={`${d.document_id}-${d.version_no}`}
+            doc={d}
+            title={titleOf(d.document_id)}
+            sourceName={names.get(d.source_id)}
+          />
+        ))}
+      </ul>
+      <p>
+        <span className="font-medium">{t("guidesUsed")}: </span>
+        {inputs.guide_ids.length ? inputs.guide_ids.map(guideTitle).join(", ") : t("noGuidesUsed")}
+      </p>
+      {inputs.extra_guides.length > 0 && (
+        <p>
+          <span className="font-medium">{t("attachedGuides")}: </span>
+          {inputs.extra_guides.join(", ")}
+        </p>
+      )}
+      {inputs.ai_override_source_ids.length > 0 && (
+        <p className="text-amber-800 dark:text-amber-200">
+          {t("aiOffUsed", { names: inputs.ai_override_source_ids.map((s) => names.get(s) ?? `#${s}`).join(", ") })}
+        </p>
+      )}
+    </div>
   );
 }

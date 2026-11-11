@@ -14,6 +14,7 @@ export function AdminTabs() {
     { href: "/admin/templates", label: t("tabs.templates"), active: pathname.startsWith("/admin/templates") },
     { href: "/admin/ai", label: t("tabs.ai"), active: pathname.startsWith("/admin/ai") },
     { href: "/admin/assistant", label: t("tabs.assistant"), active: pathname.startsWith("/admin/assistant") },
+    { href: "/admin/organizations", label: t("tabs.organizations"), active: pathname.startsWith("/admin/organizations") },
   ];
   return (
     <nav aria-label="Admin" className="mx-auto flex w-full max-w-6xl flex-wrap gap-1 px-6 pt-4 text-sm">

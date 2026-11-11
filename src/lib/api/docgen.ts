@@ -13,9 +13,24 @@ export type Guide = {
   source_ids: number[];
   created_at: string;
   archived_at: string | null;
+  // A default of every draft for every site; source_ids are unused while true. Older servers
+  // do not send these.
+  is_global?: boolean;
+  text_updated_at?: string | null;
 };
 
 export type GuideWithText = Guide & { body_text: string };
+
+/** An earlier text of a guide, kept when an admin replaced its file. */
+export type GuideRevision = {
+  id: number;
+  filename: string;
+  body_text: string;
+  chars: number;
+  valid_from: string;
+  replaced_by: string | null;
+  replaced_at: string;
+};
 
 /** One post to draft from. files null = every attached file; compare_with null = the version
  * just before; compare false = no list of changes. */
@@ -120,6 +135,15 @@ export const docgenApi = {
   createGuide: (title: string, file: UploadFile) =>
     apiFetch<GuideWithText>("/admin/guides", json("POST", { title, file })),
   archiveGuide: (id: number) => apiFetch<void>(`/admin/guides/${id}`, { method: "DELETE" }),
+  guide: (id: number) => apiFetch<GuideWithText>(`/admin/guides/${id}`),
+  updateGuide: (id: number, body: { title?: string; is_global?: boolean }) =>
+    apiFetch<Guide>(`/admin/guides/${id}`, json("PATCH", body)),
+  replaceGuideFile: (id: number, file: UploadFile) =>
+    apiFetch<GuideWithText>(`/admin/guides/${id}/file`, json("PUT", { file })),
+  guideHistory: (id: number) => apiFetch<GuideRevision[]>(`/admin/guides/${id}/history`),
+  // The full list of sites that use the guide (replaces the current one).
+  setGuideSources: (id: number, sourceIds: number[]) =>
+    apiFetch<Guide>(`/admin/guides/${id}/sources`, json("PUT", { source_ids: sourceIds })),
   sourceGuides: (sourceId: number) => apiFetch<Guide[]>(`/admin/sources/${sourceId}/guides`),
   linkGuide: (sourceId: number, guideId: number) =>
     apiFetch<void>(`/admin/sources/${sourceId}/guides/${guideId}`, { method: "PUT" }),

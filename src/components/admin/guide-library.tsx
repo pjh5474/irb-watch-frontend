@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { SOURCES_KEY } from "@/components/admin/admin-sources";
 import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
+import { filterGuides, GuideCard, type GuideFilter } from "@/components/admin/guide-card";
 import { Section } from "@/components/admin/section";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -15,7 +16,7 @@ import { docgenApi, guideFileProblem, toUpload, type GuideWithText } from "@/lib
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 export const GUIDES_KEY = ["admin", "guides"] as const;
-// The draft form's "default guides" lists change with every link, unlink and archive.
+// The draft form's "default guides" lists change with every link, unlink, archive and global flag.
 const DEFAULT_GUIDES_KEY = ["docgen", "default-guides"] as const;
 
 type Message = { kind: "ok" | "error"; text: string } | null;
@@ -42,17 +43,28 @@ export function GuideLibrary() {
   });
   const sources = useQuery({ queryKey: SOURCES_KEY, queryFn: adminApi.sources });
   const names = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s.name])), [sources.data]);
+  const sortedSources = useMemo(
+    () => [...(sources.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [sources.data],
+  );
 
   const upload = useSingleFlight();
-  const archive = useSingleFlight();
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [makeGlobal, setMakeGlobal] = useState(false);
   // A new key empties the file box after an upload (a file input cannot be set by value).
   const [fileBox, setFileBox] = useState(0);
   const [uploaded, setUploaded] = useState<GuideWithText | null>(null);
   const [uploadMessage, setUploadMessage] = useState<Message>(null);
-  const [confirming, setConfirming] = useState<number | null>(null);
-  const [listMessage, setListMessage] = useState<Message>(null);
+  const [filter, setFilter] = useState<GuideFilter>({ text: "", scope: "all" });
+
+  async function refresh() {
+    await queryClient.invalidateQueries({ queryKey: GUIDES_KEY });
+    await queryClient.invalidateQueries({ queryKey: DEFAULT_GUIDES_KEY });
+    await queryClient.invalidateQueries({ queryKey: ["admin", "source-guides"] });
+    await queryClient.invalidateQueries({ queryKey: ["admin", "guide-text"] });
+    await queryClient.invalidateQueries({ queryKey: ["admin", "guide-history"] });
+  }
 
   async function send(event: React.FormEvent) {
     event.preventDefault();
@@ -72,31 +84,26 @@ export function GuideLibrary() {
         setTitle("");
         setFile(null);
         setFileBox((n) => n + 1);
-        await queryClient.invalidateQueries({ queryKey: GUIDES_KEY });
+        if (makeGlobal) {
+          try {
+            await docgenApi.updateGuide(guide.id, { is_global: true });
+          } catch (e) {
+            // The guide exists; only the flag failed. Say so instead of hiding it.
+            setUploadMessage({ kind: "error", text: `${t("guides.globalFailed")} ${adminErrorText(e, t)}` });
+          }
+        }
+        setMakeGlobal(false);
+        await refresh();
       } catch (e) {
         setUploadMessage({ kind: "error", text: adminErrorText(e, t) });
       }
     });
   }
 
-  async function doArchive(id: number) {
-    setListMessage(null);
-    await archive.run(async () => {
-      try {
-        await docgenApi.archiveGuide(id);
-        setConfirming(null);
-        setListMessage({ kind: "ok", text: t("guides.archivedDone") });
-        await queryClient.invalidateQueries({ queryKey: GUIDES_KEY });
-        await queryClient.invalidateQueries({ queryKey: DEFAULT_GUIDES_KEY });
-        await queryClient.invalidateQueries({ queryKey: ["admin", "source-guides"] });
-      } catch (e) {
-        setListMessage({ kind: "error", text: adminErrorText(e, t) });
-      }
-    });
-  }
+  const shown = filterGuides(guides.data ?? [], filter);
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
       <Section icon={BookOpen} accent="violet" level={1} title={t("guides.title")}>
         <p className="text-sm opacity-80">{t("guides.intro")}</p>
       </Section>
@@ -122,6 +129,13 @@ export function GuideLibrary() {
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1" checked={makeGlobal} onChange={(e) => setMakeGlobal(e.target.checked)} />
+            <span>
+              {t("guides.uploadGlobal")}
+              <span className="block text-xs opacity-70">{t("guides.uploadGlobalHint")}</span>
+            </span>
+          </label>
           <div>
             <Button type="submit" size="sm" disabled={upload.busy} aria-busy={upload.busy}>
               {upload.busy && <Spinner aria-hidden />}
@@ -138,15 +152,43 @@ export function GuideLibrary() {
             <pre className="max-h-64 overflow-auto rounded border bg-muted/40 p-2 text-xs whitespace-pre-wrap">
               {uploaded.body_text}
             </pre>
+            <p className="text-xs opacity-80">{t("guides.nextLink")}</p>
           </div>
         )}
       </Section>
 
       <Section icon={BookOpen} accent="slate" title={t("guides.listTitle")}>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-          {t("guides.showArchived")}
-        </label>
+        <div className="flex flex-wrap items-end gap-2 text-sm">
+          <label className="flex min-w-48 flex-1 flex-col gap-1">
+            {t("guides.searchGuides")}
+            <input
+              className="rounded border px-2 py-1.5"
+              value={filter.text}
+              onChange={(e) => setFilter({ ...filter, text: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            {t("guides.scopeFilter")}
+            <select
+              className="rounded border px-2 py-1.5"
+              value={filter.scope}
+              onChange={(e) => setFilter({ ...filter, scope: e.target.value as GuideFilter["scope"] })}
+            >
+              <option value="all">{t("guides.scopeAll")}</option>
+              <option value="global">{t("guides.scopeGlobal")}</option>
+              <option value="unlinked">{t("guides.scopeUnlinked")}</option>
+              {sortedSources.map((s) => (
+                <option key={s.id} value={`source:${s.id}`}>
+                  {t("guides.scopeSource", { name: s.name })}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            {t("guides.showArchived")}
+          </label>
+        </div>
         {guides.isLoading && <p className="text-sm opacity-70">{t("loading")}</p>}
         {guides.isError && (
           <p role="alert" className="text-sm text-red-600">
@@ -154,42 +196,12 @@ export function GuideLibrary() {
           </p>
         )}
         {guides.data?.length === 0 && <p className="text-sm opacity-70">{t("guides.empty")}</p>}
+        {!!guides.data?.length && shown.length === 0 && <p className="text-sm opacity-70">{t("guides.noMatch")}</p>}
         <ul className="flex flex-col divide-y">
-          {guides.data?.map((g) => (
-            <li key={g.id} className="flex flex-col gap-1 py-2 text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{g.title}</span>
-                <span className="opacity-60">{g.filename}</span>
-                <span className="opacity-60">{t("guides.chars", { n: g.chars })}</span>
-                {g.archived_at && <Badge>{t("guides.archived")}</Badge>}
-              </div>
-              <p className="text-xs opacity-70">
-                {g.source_ids.length
-                  ? t("guides.linkedTo", { names: g.source_ids.map((s) => names.get(s) ?? `#${s}`).join(", ") })
-                  : t("guides.notLinked")}
-              </p>
-              {!g.archived_at &&
-                (confirming === g.id ? (
-                  <span className="flex flex-wrap items-center gap-2">
-                    {t("guides.confirmArchive")}
-                    <Button size="sm" variant="destructive" disabled={archive.busy} onClick={() => doArchive(g.id)}>
-                      {t("guides.confirm")}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
-                      {t("guides.cancel")}
-                    </Button>
-                  </span>
-                ) : (
-                  <div>
-                    <Button size="sm" variant="ghost" onClick={() => setConfirming(g.id)}>
-                      {t("guides.archive")}
-                    </Button>
-                  </div>
-                ))}
-            </li>
+          {shown.map((g) => (
+            <GuideCard key={g.id} guide={g} sources={sortedSources} names={names} onChanged={refresh} />
           ))}
         </ul>
-        <Note message={listMessage} />
       </Section>
     </main>
   );
@@ -206,7 +218,8 @@ export function SourceGuides({ sourceId }: { sourceId: number }) {
   const [message, setMessage] = useState<Message>(null);
 
   const linkedIds = new Set((linked.data ?? []).map((g) => g.id));
-  const available = (library.data ?? []).filter((g) => !linkedIds.has(g.id));
+  // Global guides already apply here; they cannot be linked or unlinked per site.
+  const available = (library.data ?? []).filter((g) => !linkedIds.has(g.id) && !g.is_global);
 
   async function change(action: "link" | "unlink", guideId: number) {
     setMessage(null);
@@ -239,9 +252,13 @@ export function SourceGuides({ sourceId }: { sourceId: number }) {
         {linked.data?.map((g) => (
           <li key={g.id} className="flex items-center gap-2">
             <span className="flex-1">{g.title}</span>
-            <Button size="sm" variant="ghost" disabled={flight.busy} onClick={() => change("unlink", g.id)}>
-              {t("guides.unlink")}
-            </Button>
+            {g.is_global ? (
+              <Badge>{t("guides.global")}</Badge>
+            ) : (
+              <Button size="sm" variant="ghost" disabled={flight.busy} onClick={() => change("unlink", g.id)}>
+                {t("guides.unlink")}
+              </Button>
+            )}
           </li>
         ))}
       </ul>

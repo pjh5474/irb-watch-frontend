@@ -320,6 +320,12 @@ function ChosenRow({
   );
 }
 
+/** Marks a guide an admin set for every site. */
+export function GlobalTag() {
+  const t = useTranslations("drafts");
+  return <span className="rounded border px-1 text-xs opacity-80">{t("guideGlobal")}</span>;
+}
+
 export function GuideChecklist({
   guides,
   unticked,
@@ -346,6 +352,7 @@ export function GuideChecklist({
               }}
             />
             {g.title}
+            {g.is_global && <GlobalTag />}
             <span className="opacity-60">{t("guideChars", { n: g.chars })}</span>
           </label>
         </li>

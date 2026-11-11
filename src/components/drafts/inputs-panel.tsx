@@ -6,6 +6,7 @@ import {
   choiceOf,
   chosenFromRef,
   DocumentPicker,
+  GlobalTag,
   type Chosen,
 } from "@/components/drafts/document-picker";
 import { addGuideFiles, GuideFiles } from "@/components/drafts/new-draft";
@@ -45,7 +46,9 @@ export function panelGuides(
 ): { guide: Guide; ticked: boolean }[] {
   const all = new Map<number, Guide>();
   for (const g of [...detail.guides, ...defaults]) all.set(g.id, g);
-  return [...all.values()].map((g) => ({
+  // Global guides first, as in the new-draft form.
+  const list = [...all.values()].sort((a, b) => Number(!!b.is_global) - Number(!!a.is_global));
+  return list.map((g) => ({
     guide: g,
     ticked: state.toggled.get(g.id) ?? (detail.draft.guide_ids.includes(g.id) || !originalDefaults.has(g.id)),
   }));
@@ -121,6 +124,7 @@ export function InputsEditor({
                 onChange={(e) => onChange({ ...state, toggled: new Map(state.toggled).set(guide.id, e.target.checked) })}
               />
               {guide.title}
+              {guide.is_global && <GlobalTag />}
             </label>
           </li>
         ))}

@@ -6,7 +6,14 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MAX_DOCUMENTS, type DocChoice, type DocRef, type Guide } from "@/lib/api/docgen";
-import { pickerDocuments, pickerFiles, pickerVersions, type PickerSource } from "@/lib/draft-picker";
+import {
+  PICKER_LIMIT,
+  pickerDocuments,
+  pickerFiles,
+  pickerVersions,
+  type PickerDocument,
+  type PickerSource,
+} from "@/lib/draft-picker";
 
 // The document part of the draft form, shared by "New draft" and the draft page's side panel.
 // Each chosen post has a version, the version its changes are listed against, and which of its
@@ -93,14 +100,16 @@ export function DocumentPicker({
     enabled: sourceId !== null,
   });
 
-  function add(doc: Omit<InitialDoc, "version_no">) {
+  function add(doc: PickerDocument) {
     setError(null);
     if (chosen.some((c) => c.id === doc.id)) return;
     if (chosen.length >= MAX_DOCUMENTS) {
       setError(t("tooMany", { max: MAX_DOCUMENTS }));
       return;
     }
-    onChange([...chosen, newChosen({ ...doc, version_no: null })]);
+    const row = newChosen({ id: doc.id, title: doc.title, source_id: doc.source_id, version_no: null });
+    // Found by a file name: only the matching files start ticked (page text stays ticked).
+    onChange([...chosen, doc.matched_files?.length ? { ...row, files: doc.matched_files } : row]);
   }
 
   return (
@@ -134,14 +143,19 @@ export function DocumentPicker({
       {sourceId !== null && (
         <ul className="flex max-h-64 flex-col divide-y overflow-y-auto rounded border text-sm">
           {results.isLoading && <li className="p-2 opacity-70">{t("loading")}</li>}
-          {results.data?.length === 0 && <li className="p-2 opacity-70">{t("noResults")}</li>}
-          {results.data?.map((d) => {
+          {results.data?.documents.length === 0 && <li className="p-2 opacity-70">{t("noResults")}</li>}
+          {results.data?.documents.map((d) => {
             const isChosen = chosen.some((c) => c.id === d.id);
             return (
               <li key={d.id} className="flex items-center gap-2 p-2">
                 <span className="flex-1 break-words">
                   {d.title}
                   {d.posted_on && <span className="ml-2 opacity-60">{d.posted_on}</span>}
+                  {d.matched_files?.length ? (
+                    <span className="block text-xs break-all opacity-80">
+                      {t("matchedFiles", { names: d.matched_files.join(", ") })}
+                    </span>
+                  ) : null}
                 </span>
                 <Button size="sm" variant="outline" disabled={isChosen} onClick={() => add(d)}>
                   {isChosen ? t("added") : t("add")}
@@ -150,6 +164,11 @@ export function DocumentPicker({
             );
           })}
         </ul>
+      )}
+      {results.data?.more && (
+        <p role="status" className="text-xs text-amber-700 dark:text-amber-300">
+          {t(search.trim() ? "moreResultsSearch" : "moreResults", { n: PICKER_LIMIT })}
+        </p>
       )}
       {error && (
         <p role="alert" className="text-sm text-red-600">

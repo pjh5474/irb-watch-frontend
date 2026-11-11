@@ -11,6 +11,7 @@ import { DraftEditor } from "../src/components/drafts/draft-editor";
 import { panelGuides, startPanel } from "../src/components/drafts/inputs-panel";
 import { buildRequest, NewDraft } from "../src/components/drafts/new-draft";
 import { ApiError, apiFetch, filenameFrom } from "../src/lib/api/client";
+import { mergeMatches } from "../src/lib/draft-picker";
 import { elapsed, guideFileProblem, type DraftDetail } from "../src/lib/api/docgen";
 
 // ---- fakes --------------------------------------------------------------------------------
@@ -48,15 +49,23 @@ vi.mock("@/i18n/navigation", () => ({
   useRouter: () => ({ push: (href: string) => state.pushed.push(href) }),
 }));
 
-vi.mock("@/lib/draft-picker", () => ({
+vi.mock("@/lib/draft-picker", async () => ({
+  // the pure helpers stay real; only the Supabase reads are faked
+  ...(await vi.importActual<typeof import("../src/lib/draft-picker")>("../src/lib/draft-picker")),
   pickerSources: async () => [
     { id: 1, name: "Public board", requires_login: false, ai_enabled: true },
     { id: 3, name: "Study X", requires_login: true, ai_enabled: false },
   ],
-  pickerDocuments: async (sourceId: number) =>
-    sourceId === 1
-      ? [{ id: 10, title: "Consent form", posted_on: "2026-11-01", source_id: 1 }]
-      : [{ id: 30, title: "Study protocol", posted_on: null, source_id: 3 }],
+  PICKER_LIMIT: 20,
+  pickerDocuments: async (sourceId: number, search: string) =>
+    search === "protocol.pdf"
+      ? {
+          documents: [{ id: 11, title: "Notice", posted_on: "2026-11-02", source_id: 1, matched_files: ["protocol.pdf"] }],
+          more: false,
+        }
+      : sourceId === 1
+        ? { documents: [{ id: 10, title: "Consent form", posted_on: "2026-11-01", source_id: 1 }], more: !search.includes("Consent") }
+        : { documents: [{ id: 30, title: "Study protocol", posted_on: null, source_id: 3 }], more: false },
   pickerVersions: async () => [
     { version_no: 3, created_at: "2026-11-03" },
     { version_no: 2, created_at: "2026-11-02" },
@@ -202,6 +211,18 @@ describe("helpers", () => {
     expect(choiceOf({ ...c, compare: false }).compare_with).toBeNull();
   });
 
+  it("search results: newest post first, title matches win over file matches", () => {
+    const doc = (id: number, posted_on: string | null) => ({ id, title: `T${id}`, posted_on, source_id: 1 });
+    const merged = mergeMatches(
+      [doc(1, "2026-01-01"), doc(2, null)],
+      [doc(1, "2026-01-01"), doc(3, "2026-05-01"), doc(4, "2026-01-01")],
+      new Map([[1, ["a.pdf"]], [3, ["b.pdf"]], [4, ["c.pdf"]]]),
+    );
+    expect(merged.map((d) => d.id)).toEqual([3, 4, 1, 2]);
+    expect(merged.find((d) => d.id === 1)?.matched_files).toBeUndefined(); // the title matched
+    expect(merged.find((d) => d.id === 3)?.matched_files).toEqual(["b.pdf"]);
+  });
+
   it("a document that would send nothing is caught", () => {
     const c = newChosen({ id: 10, title: "a", source_id: 1, version_no: null });
     expect(sendsNothing(c, 2)).toBe(false);
@@ -291,6 +312,34 @@ describe("NewDraft", () => {
     await screen.findByRole("option", { name: "Version 2" });
     expect(select.value).toBe("7");
     expect(screen.getByRole("option", { name: "Version 7 (chosen)" })).toBeTruthy();
+  });
+
+  it("says when a source has more documents than shown and points to the search box", async () => {
+    show(<NewDraft initial={null} />);
+    const select = await screen.findByLabelText("Source");
+    await screen.findByRole("option", { name: "Public board" });
+    fireEvent.change(select, { target: { value: "1" } });
+    expect(await screen.findByText(/Only the newest 20 documents are shown/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Search titles and file names"), { target: { value: "Consent" } });
+    await waitFor(() => expect(screen.queryByText(/Only the newest 20/)).toBeNull());
+    fireEvent.change(select, { target: { value: "3" } });
+    await screen.findByText("Study protocol");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("a post found by a file name shows the file and is added with only that file ticked", async () => {
+    show(<NewDraft initial={null} />);
+    const select = await screen.findByLabelText("Source");
+    await screen.findByRole("option", { name: "Public board" });
+    fireEvent.change(select, { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Search titles and file names"), { target: { value: "protocol.pdf" } });
+    expect(await screen.findByText("File: protocol.pdf")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    const protocol = (await screen.findByRole("checkbox", { name: /protocol\.pdf/ })) as HTMLInputElement;
+    const consent = screen.getByRole("checkbox", { name: /consent\.hwp/ }) as HTMLInputElement;
+    expect(protocol.checked).toBe(true);
+    expect(consent.checked).toBe(false);
+    expect((screen.getByRole("checkbox", { name: "Page text (the post itself)" }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("sends only the ticked files and the chosen comparison", async () => {

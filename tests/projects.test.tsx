@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +13,7 @@ const db = vi.hoisted(() => ({
   result: { data: null as unknown, error: null as unknown },
   pushed: [] as string[],
   refreshed: 0,
+  pipelines: [] as { source_id: number }[],
 }));
 
 vi.mock("@/i18n/navigation", () => ({
@@ -52,11 +54,19 @@ vi.mock("@/lib/supabase/client", () => {
   };
 });
 
+// The sites list asks which hospitals have an IRB pipeline (removing one asks first).
+vi.mock("@/lib/api/pipelines", () => ({
+  pipelineApi: { list: async () => db.pipelines },
+}));
+
 function show(node: React.ReactNode) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <NextIntlClientProvider locale="en" messages={en}>
-      {node}
-    </NextIntlClientProvider>,
+    <QueryClientProvider client={client}>
+      <NextIntlClientProvider locale="en" messages={en}>
+        {node}
+      </NextIntlClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -183,6 +193,25 @@ describe("ProjectSites", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[1]);
     expect(await screen.findByText("Site removed.")).toBeTruthy();
     expect(db.calls).toEqual(["project_sources delete project_id=5 source_id=9"]);
+  });
+
+  it("asks first before removing a hospital that has an IRB pipeline", async () => {
+    db.pipelines = [{ source_id: 9 }];
+    show(<ProjectSites projectId={5} sites={sites} available={available} />);
+    await waitFor(() => expect(db.pipelines.length).toBe(1));
+    const button = () => screen.getAllByRole("button", { name: /Remove/ })[1];
+    await new Promise((r) => setTimeout(r, 0));
+    fireEvent.click(button());
+    expect(await screen.findByText(/has an IRB pipeline/)).toBeTruthy();
+    expect(db.calls).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove anyway" }));
+    expect(await screen.findByText("Site removed.")).toBeTruthy();
+    expect(db.calls).toEqual(["project_sources delete project_id=5 source_id=9"]);
+    db.pipelines = [];
+  });
+
+  it("explains why a project with pipelines cannot be deleted", () => {
+    expect(projectErrorKey({ code: "23503" })).toBe("hasPipelines");
   });
 
   it("shows the reason when the database refuses a site", async () => {

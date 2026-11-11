@@ -26,6 +26,7 @@ export type ProjectErrorKey =
   | "tooManySites"
   | "notAllowed"
   | "invalid"
+  | "hasPipelines"
   | "saveError";
 
 /**
@@ -39,6 +40,8 @@ export function projectErrorKey(error: unknown): ProjectErrorKey {
   if (e.code === "P0001") return /sites/.test(e.message ?? "") ? "tooManySites" : "tooManyProjects";
   if (e.code === "42501") return "notAllowed";
   if (e.code === "23514") return "invalid";
+  // 23503: a project with IRB pipelines (removed ones too, until purged) cannot be deleted.
+  if (e.code === "23503") return "hasPipelines";
   return "saveError";
 }
 

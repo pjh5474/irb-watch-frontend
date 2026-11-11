@@ -1,10 +1,13 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { pipelinesKey } from "@/components/pipelines/project-pipelines";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useRouter } from "@/i18n/navigation";
+import { pipelineApi } from "@/lib/api/pipelines";
 import {
   cleanNote,
   MAX_NAME,
@@ -201,6 +204,10 @@ export function ProjectSites({ projectId, sites, available }: { projectId: numbe
   const [choice, setChoice] = useState("");
   const [message, setMessage] = useState<Message>(null);
   const full = sites.length >= MAX_SITES;
+  // Hospitals with a live IRB pipeline: removing one asks first (the pipeline stays).
+  const pipelines = useQuery({ queryKey: [...pipelinesKey(projectId), false], queryFn: () => pipelineApi.list(projectId) });
+  const withPipeline = new Set((pipelines.data ?? []).map((p) => p.source_id));
+  const [confirming, setConfirming] = useState<number | null>(null);
 
   async function add() {
     setMessage(null);
@@ -221,6 +228,11 @@ export function ProjectSites({ projectId, sites, available }: { projectId: numbe
 
   async function remove(sourceId: number) {
     setMessage(null);
+    if (withPipeline.has(sourceId) && confirming !== sourceId) {
+      setConfirming(sourceId);
+      return;
+    }
+    setConfirming(null);
     await flight.run(async () => {
       const { error } = await createClient()
         .from("project_sources")
@@ -241,11 +253,17 @@ export function ProjectSites({ projectId, sites, available }: { projectId: numbe
       {sites.length === 0 && <p className="text-sm opacity-70">{t("noSites")}</p>}
       <ul className="flex flex-col gap-1 text-sm">
         {sites.map((s) => (
-          <li key={s.id} className="flex items-center gap-2">
+          <li key={s.id} className="flex flex-wrap items-center gap-2">
             <span className={`flex-1 ${s.name === null ? "opacity-60" : ""}`}>{s.name ?? t("siteUnavailable")}</span>
+            {confirming === s.id && <span className="text-xs text-amber-700 dark:text-amber-300">{t("removeSiteWithPipeline")}</span>}
             <Button size="sm" variant="ghost" disabled={flight.busy} onClick={() => void remove(s.id)}>
-              {t("removeSite")}
+              {confirming === s.id ? t("removeSiteAnyway") : t("removeSite")}
             </Button>
+            {confirming === s.id && (
+              <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+                {t("cancel")}
+              </Button>
+            )}
           </li>
         ))}
       </ul>

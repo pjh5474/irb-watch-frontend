@@ -1,6 +1,7 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { Pagination } from "@/components/pagination";
+import { ProjectPipelines } from "@/components/pipelines/project-pipelines";
 import { ProjectSettings, ProjectSites, type SiteRow } from "@/components/projects";
 import { Link } from "@/i18n/navigation";
 import { pageCount, parsePage } from "@/lib/paging";
@@ -177,6 +178,11 @@ export default async function ProjectPage({
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">{t("sitesTitle")}</h2>
         <ProjectSites projectId={projectId} sites={sites} available={available} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">{t("pipelinesTitle")}</h2>
+        <ProjectPipelines projectId={projectId} sites={sites} />
       </section>
 
       <section className="flex flex-col gap-3">

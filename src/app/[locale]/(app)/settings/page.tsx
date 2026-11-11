@@ -1,4 +1,5 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
+import { ChangePassword } from "@/components/change-password";
 import { DigestToggle } from "@/components/digest-toggle";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,6 +33,10 @@ export default async function SettingsPage({ params }: { params: Promise<{ local
             <p className="text-xs opacity-70">{t("studiesNote")}</p>
           </>
         )}
+      </section>
+      <section className="flex flex-col gap-3 rounded border p-4">
+        <h2 className="font-medium">{t("pwTitle")}</h2>
+        <ChangePassword />
       </section>
     </main>
   );

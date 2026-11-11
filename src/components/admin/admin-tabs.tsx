@@ -12,8 +12,10 @@ export function AdminTabs() {
     { href: "/admin/reviews", label: t("tabs.reviews"), active: pathname.startsWith("/admin/reviews") },
     { href: "/admin/guides", label: t("tabs.guides"), active: pathname.startsWith("/admin/guides") },
     { href: "/admin/templates", label: t("tabs.templates"), active: pathname.startsWith("/admin/templates") },
+    { href: "/admin/pipeline", label: t("tabs.pipeline"), active: pathname.startsWith("/admin/pipeline") },
     { href: "/admin/ai", label: t("tabs.ai"), active: pathname.startsWith("/admin/ai") },
     { href: "/admin/assistant", label: t("tabs.assistant"), active: pathname.startsWith("/admin/assistant") },
+    { href: "/admin/users", label: t("tabs.users"), active: pathname.startsWith("/admin/users") },
     { href: "/admin/organizations", label: t("tabs.organizations"), active: pathname.startsWith("/admin/organizations") },
   ];
   return (

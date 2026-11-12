@@ -33,6 +33,15 @@
     "loading": "Loading…",
     "updated": "Changed {date}",
     "documentsCount": "{n, plural, one {# document} other {# documents}}",
+    "jobs": {
+      "draft": "A draft",
+      "revision": "A revision",
+      "queued": "{kind} is waiting to be written…",
+      "running": "{kind} is being written… You can leave this page.",
+      "failed": "{kind} failed at {time}: {reason}",
+      "pipelineDraft": "IRB pipeline",
+      "ownFiles": "Made in an IRB pipeline step from your own files: {files}. A revision reads these same versions again."
+    },
     "delete": "Delete",
     "confirmDelete": "Delete this draft and all its versions?",
     "confirm": "Delete",
@@ -422,7 +431,30 @@
       "document_uploaded": "Document uploaded",
       "document_removed": "Document removed",
       "document_restored": "Document restored",
-      "document_downloaded": "Document downloaded"
+      "document_downloaded": "Document downloaded",
+      "draft_draft_started": "AI draft started",
+      "draft_revision_started": "AI revision started"
+    },
+    "drafts": {
+      "title": "AI drafts",
+      "untitled": "Draft",
+      "start": "Draft for this step",
+      "startNow": "Start the draft",
+      "started": "The draft is being written. You can leave this page; it will appear here and on the Drafts page.",
+      "files": "Your files to send",
+      "noFiles": "No files uploaded in this step or the steps before it.",
+      "fileOf": "{step} · version {n} · {file}",
+      "noText": "cannot be sent: {reason}",
+      "boardDocuments": "Hospital board documents (optional)",
+      "noBoards": "None of this hospital's boards is open to you.",
+      "useForm": "Fill this step's form (one answer per field)",
+      "settings": "The hospital's guides are used.",
+      "settingsWithInstructions": "The hospital's guides and this step's own AI instructions are used.",
+      "request": "What should the draft say? (optional)",
+      "consent": "These files of yours will be sent to the AI service: {files}. Starting the draft is your agreement. Each use is logged.",
+      "consentNone": "None of your own files will be sent.",
+      "chooseSomething": "Choose at least one file or document.",
+      "needAgree": "Tick the box for each source with AI switched off."
     }
   },
   "pagination": {

@@ -142,7 +142,8 @@ export function DraftEditor({ id }: { id: string }) {
   // The panel's guide list must be loaded before its choice is sent (see the new-draft form).
   const panelReady =
     panel === null ||
-    (panel.chosen.length > 0 &&
+    // A pipeline draft may be written from the user's own step files alone (no board document).
+    ((panel.chosen.length > 0 || (detail?.draft.step_files?.length ?? 0) > 0) &&
       !panel.chosen.some((c) => sendsNothing(c, undefined)) &&
       (draftSources.length === 0 || (originalDefaults.isSuccess && !originalDefaults.isFetching)) &&
       (panelSources.length === 0 || (panelDefaults.isSuccess && !panelDefaults.isFetching)));
@@ -233,6 +234,13 @@ export function DraftEditor({ id }: { id: string }) {
         {t("back")}
       </Link>
       <h1 className="text-2xl font-semibold break-words">{detail.draft.title || t("editorTitle")}</h1>
+      {!!detail.draft.step_files?.length && (
+        <p className="text-sm opacity-80">
+          {t("jobs.ownFiles", {
+            files: detail.draft.step_files.map((f) => `${f.name} (${f.step_name}, v${f.version_no})`).join(", "),
+          })}
+        </p>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
       <div className="flex min-w-0 flex-col gap-4">

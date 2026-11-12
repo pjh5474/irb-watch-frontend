@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Check, Download } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { StepDrafts } from "@/components/pipelines/step-drafts";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
@@ -312,6 +313,8 @@ function StepCard({
 
       <Documents pipelineId={pipelineId} step={step} readOnly={readOnly} />
       {!readOnly && <Upload pipelineId={pipelineId} step={step} />}
+
+      <StepDrafts pipelineId={pipelineId} step={step} readOnly={readOnly} />
 
       {!readOnly && (
         <div className="flex flex-wrap items-center gap-2 text-sm">

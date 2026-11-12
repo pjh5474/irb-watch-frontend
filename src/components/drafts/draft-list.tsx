@@ -6,6 +6,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { adminErrorText } from "@/components/admin/error-text";
 import { Section } from "@/components/admin/section";
+import { DraftJobs } from "@/components/drafts/draft-jobs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { docgenApi } from "@/lib/api/docgen";
@@ -58,6 +59,7 @@ export function DraftList() {
               : t("off", { reason: status.data.reason ?? "" })}
           </p>
         )}
+        <DraftJobs />
         {drafts.isLoading && <p className="text-sm opacity-70">{t("loading")}</p>}
         {drafts.isError && (
           <p role="alert" className="text-sm text-red-600">
@@ -71,8 +73,11 @@ export function DraftList() {
               <Link href={`/drafts/${d.id}`} className="min-w-48 flex-1 font-medium underline-offset-4 hover:underline">
                 {d.title || t("editorTitle")}
               </Link>
+              {d.pipeline_step_id != null && (
+                <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs dark:bg-neutral-800">{t("jobs.pipelineDraft")}</span>
+              )}
               <span className="text-xs opacity-60">
-                {t("documentsCount", { n: d.documents.length })} ·{" "}
+                {t("documentsCount", { n: d.documents.length + (d.step_files?.length ?? 0) })} ·{" "}
                 {t("updated", { date: format.dateTime(new Date(d.updated_at), { dateStyle: "medium", timeStyle: "short" }) })}
               </span>
               {confirming === d.id ? (

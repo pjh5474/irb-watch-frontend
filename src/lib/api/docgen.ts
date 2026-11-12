@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchFile } from "@/lib/api/client";
+import { ApiError, apiFetch, apiFetchFile } from "@/lib/api/client";
 
 // The docs generator's routes (backend `api/docgen.py` and `api/admin_guides.py`). Typed by
 // hand like the other new routes; replace with the generated schemas after `gen:api-types`.
@@ -112,6 +112,35 @@ export type Draft = {
   created_at: string;
   updated_at: string;
   template?: DraftTemplate | null; // null = a Markdown draft (older servers send nothing)
+  pipeline_step_id?: number | null; // made in this IRB pipeline step
+  step_files?: StepFileRef[]; // the user's own step files it is written from
+};
+
+/** One of the user's own pipeline step files a draft is written from. */
+export type StepFileRef = { document_id: number; version_no: number; name: string; step_id: number; step_name: string };
+
+/**
+ * A background draft or revision job. Every AI draft runs as one: the request is checked and
+ * counted at once, then the writing goes on even if the user leaves the page.
+ * done: draft_id is the draft to open. failed: error is the reason, written for the user.
+ */
+export type DraftJob = {
+  id: string;
+  kind: "draft" | "revision";
+  status: "queued" | "running" | "done" | "failed";
+  error: string | null;
+  draft_id: string | null;
+  pipeline_step_id: number | null;
+  created_at: string;
+  finished_at: string | null;
+};
+
+export const isOpenJob = (job: Pick<DraftJob, "status">) => job.status === "queued" || job.status === "running";
+
+/** A draft made in a pipeline step: the user's own files and, if the step allows, board documents. */
+export type StepDraft = Omit<NewDraft, "documents"> & {
+  documents: DocChoice[];
+  step_files: { document_id: number; version_no?: number | null }[];
 };
 
 export type DraftVersion = {
@@ -151,13 +180,47 @@ export const MAX_ANSWER_CHARS = 4_000;
 
 const sourceQuery = (sourceIds: number[]) => sourceIds.map((s) => `source_id=${s}`).join("&");
 
+export const JOB_POLL_MS = 2_000;
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getJob = (id: string) => apiFetch<DraftJob>(`/docgen/jobs/${id}`);
+const getDraft = (id: string) => apiFetch<DraftDetail>(`/docgen/drafts/${id}`);
+
+/**
+ * Waits until a job is done and returns it. A failed job is thrown as an ApiError carrying the
+ * server's reason, so screens show it like any refused request. The job goes on at the server
+ * even if nobody waits (the Drafts page shows open and failed jobs).
+ */
+export async function waitForJob(job: DraftJob, pollMs: number = JOB_POLL_MS): Promise<DraftJob> {
+  let current = job;
+  while (isOpenJob(current)) {
+    await pause(pollMs);
+    current = await getJob(current.id);
+  }
+  if (current.status === "failed") throw new ApiError(502, current.error ?? "");
+  return current;
+}
+
 export const docgenApi = {
   status: () => apiFetch<DocgenStatus>("/docgen/status"),
   defaultGuides: (sourceIds: number[]) =>
     apiFetch<Guide[]>(`/docgen/guides?${sourceQuery(sourceIds)}`),
-  create: (body: NewDraft) => apiFetch<DraftDetail>("/docgen/drafts", json("POST", body)),
+  // Starts the job, waits for it and returns the new draft. Refusals (limit, access, an AI-off
+  // source) come back at once from the start call.
+  create: async (body: NewDraft): Promise<DraftDetail> => {
+    const job = await waitForJob(await apiFetch<DraftJob>("/docgen/drafts", json("POST", body)));
+    return getDraft(job.draft_id!);
+  },
+  // A draft for one step of the user's IRB pipeline; returns the job (one open job per step).
+  startStepDraft: (stepId: number, body: StepDraft) =>
+    apiFetch<DraftJob>(`/docgen/steps/${stepId}/drafts`, json("POST", body)),
+  // The drafts made in a pipeline's steps, newest first.
+  pipelineDrafts: (pipelineId: number) => apiFetch<Draft[]>(`/docgen/pipelines/${pipelineId}/drafts`),
+  // Open jobs, and jobs that failed in the last 24 hours.
+  jobs: () => apiFetch<DraftJob[]>("/docgen/jobs"),
+  job: getJob,
   list: () => apiFetch<Draft[]>("/docgen/drafts"),
-  get: (id: string) => apiFetch<DraftDetail>(`/docgen/drafts/${id}`),
+  get: getDraft,
   // baseVersionNo: the version the edit started from; the server answers 409 if a newer one exists.
   saveEdit: (id: string, markdown: string, baseVersionNo: number) =>
     apiFetch<DraftVersion>(
@@ -175,11 +238,22 @@ export const docgenApi = {
   checkTemplate: (file: UploadFile) =>
     apiFetch<{ filename: string; fields: FormField[] }>("/docgen/templates/check", json("POST", { file })),
   // inputs: new documents and guides from the side panel; omitted = the draft's current ones.
-  revise: (id: string, instruction: string, aiOverrideSourceIds: number[] = [], inputs?: ReviseInputs) =>
-    apiFetch<DraftVersion>(
-      `/docgen/drafts/${id}/revise`,
-      json("POST", { instruction, ai_override_source_ids: aiOverrideSourceIds, ...(inputs ? { inputs } : {}) }),
-    ),
+  // Starts the revision job, waits for it and returns the new (newest) version.
+  revise: async (
+    id: string,
+    instruction: string,
+    aiOverrideSourceIds: number[] = [],
+    inputs?: ReviseInputs,
+  ): Promise<DraftVersion> => {
+    await waitForJob(
+      await apiFetch<DraftJob>(
+        `/docgen/drafts/${id}/revise`,
+        json("POST", { instruction, ai_override_source_ids: aiOverrideSourceIds, ...(inputs ? { inputs } : {}) }),
+      ),
+    );
+    const detail = await getDraft(id);
+    return detail.versions[detail.versions.length - 1];
+  },
   exportDocx: (id: string, versionNo: number) =>
     apiFetchFile(`/docgen/drafts/${id}/export?version_no=${versionNo}`, { method: "POST" }, "draft.docx"),
   remove: (id: string) => apiFetch<void>(`/docgen/drafts/${id}`, { method: "DELETE" }),

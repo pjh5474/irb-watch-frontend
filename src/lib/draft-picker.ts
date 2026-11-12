@@ -24,6 +24,23 @@ export async function pickerSources(): Promise<PickerSource[]> {
   return data ?? [];
 }
 
+/**
+ * The boards of one hospital the user can read (row-level security hides the others), the
+ * form-box board first: a pipeline step's draft picks its board documents from these.
+ */
+export async function pickerSourcesOfHospital(hospitalId: number): Promise<PickerSource[]> {
+  const { data, error } = await createClient()
+    .from("sources")
+    .select("id, name, requires_login, ai_enabled, board_kind")
+    .eq("hospital_id", hospitalId)
+    .order("name");
+  if (error) throw new Error(error.message);
+  const rank = (kind: string) => (kind === "forms" ? 0 : 1);
+  return [...(data ?? [])]
+    .sort((a, b) => rank(a.board_kind) - rank(b.board_kind))
+    .map(({ id, name, requires_login, ai_enabled }) => ({ id, name, requires_login, ai_enabled }));
+}
+
 export const PICKER_LIMIT = 20;
 const FILE_ROWS = 200; // attachment rows read per file-name search
 

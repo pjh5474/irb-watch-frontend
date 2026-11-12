@@ -71,6 +71,31 @@ export type StepChange = Partial<{
   note: string;
 }>;
 
+/** One of the user's own files offered for an AI draft of a step (its newest version). */
+export type DraftFileChoice = {
+  document_id: number;
+  name: string;
+  step_id: number;
+  step_name: string;
+  version_no: number;
+  filename: string;
+  has_text: boolean; // false: stored only, cannot be sent to the AI
+  text_note: string | null;
+  ticked: boolean;
+};
+
+/** What the "Draft for this step" dialog starts from. Nothing here has been sent anywhere. */
+export type DraftInputs = {
+  step_id: number;
+  step_name: string;
+  hospital_id: number;
+  files: DraftFileChoice[];
+  allow_board_documents: boolean;
+  guide_ids: number[];
+  form_template_id: number | null;
+  has_instructions: boolean;
+};
+
 export const MAX_PIPELINE_FILE = 20_000_000;
 
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
@@ -95,6 +120,8 @@ export const pipelineApi = {
   removeStep: (id: number, stepId: number) => apiFetch<PipelineStep>(step(id, stepId), { method: "DELETE" }),
   restoreStep: (id: number, stepId: number) =>
     apiFetch<PipelineStep>(`${step(id, stepId)}/restore`, { method: "POST" }),
+
+  draftInputs: (id: number, stepId: number) => apiFetch<DraftInputs>(`${step(id, stepId)}/draft-inputs`),
 
   upload: (id: number, stepId: number, name: string, file: UploadFile) =>
     apiFetch<{ document: StepDocument; version_no: number }>(`${step(id, stepId)}/documents`, json("POST", { name, file })),

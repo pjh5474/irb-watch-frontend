@@ -24,6 +24,30 @@ export type AdminSource = {
   // Where the server files this source's stored login: snuh-<board key>, or
   // rbay-<hospital code> (one login per R-BAY hospital). Older servers do not send it.
   login_site?: string | null;
+  // The hospital this board belongs to, and the board's kind (sets defaults only).
+  hospital_id: number | null;
+  board_kind: BoardKind;
+};
+
+export const BOARD_KINDS = ["notice", "forms", "regulations", "other"] as const;
+export type BoardKind = (typeof BOARD_KINDS)[number];
+
+// The platform-wide hospital catalog; each hospital groups its boards (sources).
+export type HospitalBoard = {
+  id: number;
+  name: string;
+  adapter: string;
+  board_kind: BoardKind;
+  is_active: boolean;
+  requires_login: boolean;
+};
+export type AdminHospital = {
+  id: number;
+  name: string;
+  note: string;
+  created_at: string;
+  updated_at: string;
+  boards: HospitalBoard[];
 };
 
 export type SourceMember = {
@@ -53,11 +77,29 @@ const json = (method: string, body: unknown): RequestInit => ({ method, body: JS
 
 export const adminApi = {
   sources: () => apiFetch<AdminSource[]>("/admin/sources"),
-  createSource: (body: { name: string; url: string; login_user?: string | null }) =>
-    apiFetch<AdminSource>("/admin/sources", json("POST", body)),
+  // hospital_id null: the server picks the hospital of another board on the same site, else
+  // the hospital named like the board (R-BAY: the part before " : "), created if missing.
+  createSource: (body: {
+    name: string;
+    url: string;
+    login_user?: string | null;
+    hospital_id?: number | null;
+    board_kind?: BoardKind | null;
+  }) => apiFetch<AdminSource>("/admin/sources", json("POST", body)),
   // A source an admin fills by hand (no e-IRB site); never scanned.
-  createManualSource: (body: { name: string; members_only: boolean; ai_enabled?: boolean | null }) =>
-    apiFetch<AdminSource>("/admin/sources/manual", json("POST", body)),
+  createManualSource: (body: {
+    name: string;
+    members_only: boolean;
+    ai_enabled?: boolean | null;
+    hospital_id?: number | null;
+    board_kind?: BoardKind | null;
+  }) => apiFetch<AdminSource>("/admin/sources/manual", json("POST", body)),
+
+  hospitals: () => apiFetch<{ hospitals: AdminHospital[]; board_kinds: BoardKind[] }>("/admin/hospitals"),
+  createHospital: (body: { name: string; note?: string }) =>
+    apiFetch<AdminHospital>("/admin/hospitals", json("POST", body)),
+  updateHospital: (id: number, body: Partial<{ name: string; note: string }>) =>
+    apiFetch<AdminHospital>(`/admin/hospitals/${id}`, json("PATCH", body)),
   manualCreateDocument: (
     sourceId: number,
     body: { title: string; note: string; posted_on: string | null; files: UploadFile[] },
@@ -85,7 +127,14 @@ export const adminApi = {
     ),
   updateSource: (
     id: number,
-    body: Partial<{ name: string; is_active: boolean; login_user: string; ai_enabled: boolean }>,
+    body: Partial<{
+      name: string;
+      is_active: boolean;
+      login_user: string;
+      ai_enabled: boolean;
+      hospital_id: number; // moves the board to another hospital
+      board_kind: BoardKind;
+    }>,
   ) => apiFetch<AdminSource>(`/admin/sources/${id}`, json("PATCH", body)),
   scanSource: (id: number) => apiFetch<{ status: string }>(`/admin/sources/${id}/scan`, { method: "POST" }),
   scanAll: () => apiFetch<{ status: string }>("/admin/scans/run-all", { method: "POST" }),

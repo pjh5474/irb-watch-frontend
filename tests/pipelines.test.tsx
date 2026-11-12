@@ -11,8 +11,8 @@ import { daysUntil, sizeLabel, todaySeoul, type PipelineDetail, type PipelineSum
 const SUMMARY: PipelineSummary = {
   id: 9,
   project_id: 1,
-  source_id: 4,
-  source_name: "SNUH board",
+  hospital_id: 4,
+  hospital_name: "SNUH",
   in_project: true,
   steps: 2,
   closed_steps: 1,
@@ -113,9 +113,9 @@ vi.mock("@/lib/api/pipelines", async () => {
     ...actual,
     pipelineApi: {
       list: async () => state.list,
-      start: async (projectId: number, sourceId: number) => {
+      start: async (projectId: number, hospitalId: number) => {
         if (state.startError) throw state.startError;
-        state.calls.push(["start", projectId, sourceId]);
+        state.calls.push(["start", projectId, hospitalId]);
         return { id: 77 };
       },
       get: async () => DETAIL,
@@ -173,7 +173,7 @@ describe("helpers", () => {
 describe("ProjectPipelines", () => {
   it("starts a pipeline for a hospital without one and links the others", async () => {
     state.list = [SUMMARY];
-    wrap(<ProjectPipelines projectId={1} sites={[{ id: 4, name: "SNUH board" }, { id: 5, name: "Ewha board" }]} />);
+    wrap(<ProjectPipelines projectId={1} hospitals={[{ id: 4, name: "SNUH" }, { id: 5, name: "Ewha" }]} />);
     expect((await screen.findByRole("link", { name: "Open" })).getAttribute("href")).toBe("/pipelines/9");
     expect(screen.getByText("1 of 2 steps finished")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Start IRB pipeline" }));
@@ -183,22 +183,23 @@ describe("ProjectPipelines", () => {
 
   it("shows the server's reason when starting fails", async () => {
     state.startError = new ApiError(409, "this hospital already has a pipeline in the project");
-    wrap(<ProjectPipelines projectId={1} sites={[{ id: 5, name: "Ewha board" }]} />);
+    wrap(<ProjectPipelines projectId={1} hospitals={[{ id: 5, name: "Ewha" }]} />);
     fireEvent.click(await screen.findByRole("button", { name: "Start IRB pipeline" }));
     expect((await screen.findByRole("alert")).textContent).toContain("already has a pipeline");
   });
 
   it("lists pipelines of hospitals no longer in the project", async () => {
     state.list = [{ ...SUMMARY, in_project: false }];
-    wrap(<ProjectPipelines projectId={1} sites={[]} />);
+    wrap(<ProjectPipelines projectId={1} hospitals={[]} />);
     await screen.findByText("Hospitals no longer in this project");
+    expect(screen.getByText("SNUH")).toBeTruthy();
   });
 });
 
 describe("PipelineView", () => {
   it("shows steps, checklist, versions, overdue only for open steps, and archived statuses hidden", async () => {
     wrap(<PipelineView id={9} />);
-    await screen.findByRole("heading", { name: "IRB pipeline: SNUH board" });
+    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
     expect(screen.getByText("✓ Protocol", { exact: false })).toBeTruthy();
     expect(screen.getByText("version 2 · p2.docx · 12 KB")).toBeTruthy();
     expect(screen.queryByText(/overdue/)).toBeNull(); // the overdue step is approved (closed)
@@ -210,7 +211,7 @@ describe("PipelineView", () => {
 
   it("changes status, dates and order", async () => {
     wrap(<PipelineView id={9} />);
-    await screen.findByRole("heading", { name: "IRB pipeline: SNUH board" });
+    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
     // One change at a time: the controls are disabled while a change is saved.
     fireEvent.change(screen.getAllByLabelText("Status")[0], { target: { value: "submitted" } });
     await vi.waitFor(() => expect((screen.getAllByLabelText("Due date")[0] as HTMLInputElement).disabled).toBe(false));
@@ -228,7 +229,7 @@ describe("PipelineView", () => {
 
   it("uploads to a checklist name or a typed one, and checks the file first", async () => {
     wrap(<PipelineView id={9} />);
-    await screen.findByRole("heading", { name: "IRB pipeline: SNUH board" });
+    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
     const step = screen.getAllByRole("listitem").find((li) => li.textContent?.includes("Required documents")) as HTMLElement;
     const form = within(step);
     fireEvent.click(form.getByRole("button", { name: "Upload" }));
@@ -244,7 +245,7 @@ describe("PipelineView", () => {
 
   it("adds a typed step and asks before removing a step", async () => {
     wrap(<PipelineView id={9} />);
-    await screen.findByRole("heading", { name: "IRB pipeline: SNUH board" });
+    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect((await screen.findByText("Choose a step type or enter a name."))).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Step type"), { target: { value: "2" } });
@@ -259,7 +260,7 @@ describe("PipelineView", () => {
 
   it("opens the history", async () => {
     wrap(<PipelineView id={9} />);
-    await screen.findByRole("heading", { name: "IRB pipeline: SNUH board" });
+    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
     fireEvent.click(screen.getByRole("button", { name: "Show history" }));
     await screen.findByText("Document uploaded");
   });

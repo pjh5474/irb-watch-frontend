@@ -37,7 +37,12 @@ vi.mock("@/i18n/navigation", () => ({
 }));
 
 vi.mock("@/lib/api/admin", () => ({
-  adminApi: { sources: async () => [{ id: 4, name: "SNUH board" }] },
+  adminApi: {
+    hospitals: async () => ({
+      hospitals: [{ id: 4, name: "SNUH", note: "", created_at: "", updated_at: "", boards: [] }],
+      board_kinds: ["notice", "forms", "regulations", "other"],
+    }),
+  },
 }));
 
 vi.mock("@/lib/api/docgen", () => ({
@@ -72,8 +77,8 @@ vi.mock("@/lib/api/pipeline", async () => {
         state.calls.push(["archiveType", id]);
       },
       restoreStepType: async () => {},
-      templates: async () => [{ source_id: null, step_type_ids: [1, 3], updated_at: "x" }],
-      saveTemplate: async (sourceId: number | null, ids: number[]) => state.calls.push(["saveTemplate", sourceId, ids]),
+      templates: async () => [{ hospital_id: null, step_type_ids: [1, 3], updated_at: "x" }],
+      saveTemplate: async (hospitalId: number | null, ids: number[]) => state.calls.push(["saveTemplate", hospitalId, ids]),
       deleteTemplate: async () => {},
     },
   };

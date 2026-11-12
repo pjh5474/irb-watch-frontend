@@ -21,7 +21,7 @@ export type StepType = {
 
 export type StepTypeInput = Omit<StepType, "id" | "archived_at" | "updated_at">;
 
-export type PipelineTemplate = { source_id: number | null; step_type_ids: number[]; updated_at: string };
+export type PipelineTemplate = { hospital_id: number | null; step_type_ids: number[]; updated_at: string };
 
 export const MAX_INSTRUCTIONS = 4000;
 
@@ -46,12 +46,13 @@ export const pipelineAdminApi = {
   restoreStepType: (id: number) => apiFetch<StepType>(`${base}/step-types/${id}/restore`, { method: "POST" }),
 
   templates: () => apiFetch<PipelineTemplate[]>(`${base}/templates`),
-  saveTemplate: (sourceId: number | null, stepTypeIds: number[]) =>
+  saveTemplate: (hospitalId: number | null, stepTypeIds: number[]) =>
     apiFetch<PipelineTemplate>(
-      sourceId === null ? `${base}/templates/global` : `${base}/templates/sources/${sourceId}`,
+      hospitalId === null ? `${base}/templates/global` : `${base}/templates/hospitals/${hospitalId}`,
       json("PUT", { step_type_ids: stepTypeIds }),
     ),
-  deleteTemplate: (sourceId: number) => apiFetch<void>(`${base}/templates/sources/${sourceId}`, { method: "DELETE" }),
+  deleteTemplate: (hospitalId: number) =>
+    apiFetch<void>(`${base}/templates/hospitals/${hospitalId}`, { method: "DELETE" }),
 };
 
 /** Moves the item at `index` one place up (-1) or down (+1); returns a new array. */

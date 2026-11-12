@@ -191,22 +191,32 @@ export function ProjectSettings({ id, name: savedName, note: savedNote }: { id: 
   );
 }
 
-export type SiteRow = { id: number; name: string | null };
+/** A hospital of a project with the boards the user can read (RLS hides the others). */
+export type HospitalRow = { id: number; name: string; boards: { id: number; name: string }[] };
 
 /**
- * The sites of one project. `sites` are the linked ones (name null = the user can no longer
- * read that site); `available` are readable sites not yet linked.
+ * The hospitals of one project. Any hospital may be added (owner, 2026-11-12); its boards stay
+ * gated per board, so a hospital may show no board at all. `available` are hospitals not yet
+ * linked.
  */
-export function ProjectSites({ projectId, sites, available }: { projectId: number; sites: SiteRow[]; available: { id: number; name: string }[] }) {
+export function ProjectHospitals({
+  projectId,
+  hospitals,
+  available,
+}: {
+  projectId: number;
+  hospitals: HospitalRow[];
+  available: { id: number; name: string }[];
+}) {
   const t = useTranslations("projects");
   const router = useRouter();
   const flight = useSingleFlight();
   const [choice, setChoice] = useState("");
   const [message, setMessage] = useState<Message>(null);
-  const full = sites.length >= MAX_SITES;
+  const full = hospitals.length >= MAX_SITES;
   // Hospitals with a live IRB pipeline: removing one asks first (the pipeline stays).
   const pipelines = useQuery({ queryKey: [...pipelinesKey(projectId), false], queryFn: () => pipelineApi.list(projectId) });
-  const withPipeline = new Set((pipelines.data ?? []).map((p) => p.source_id));
+  const withPipeline = new Set((pipelines.data ?? []).map((p) => p.hospital_id));
   const [confirming, setConfirming] = useState<number | null>(null);
 
   async function add() {
@@ -214,8 +224,8 @@ export function ProjectSites({ projectId, sites, available }: { projectId: numbe
     if (!choice) return;
     await flight.run(async () => {
       const { error } = await createClient()
-        .from("project_sources")
-        .insert({ project_id: projectId, source_id: Number(choice) });
+        .from("project_hospitals")
+        .insert({ project_id: projectId, hospital_id: Number(choice) });
       if (error) {
         setMessage({ kind: "error", text: t(`errors.${projectErrorKey(error)}`) });
         return;
@@ -226,19 +236,19 @@ export function ProjectSites({ projectId, sites, available }: { projectId: numbe
     });
   }
 
-  async function remove(sourceId: number) {
+  async function remove(hospitalId: number) {
     setMessage(null);
-    if (withPipeline.has(sourceId) && confirming !== sourceId) {
-      setConfirming(sourceId);
+    if (withPipeline.has(hospitalId) && confirming !== hospitalId) {
+      setConfirming(hospitalId);
       return;
     }
     setConfirming(null);
     await flight.run(async () => {
       const { error } = await createClient()
-        .from("project_sources")
+        .from("project_hospitals")
         .delete()
         .eq("project_id", projectId)
-        .eq("source_id", sourceId);
+        .eq("hospital_id", hospitalId);
       if (error) {
         setMessage({ kind: "error", text: t(`errors.${projectErrorKey(error)}`) });
         return;
@@ -250,20 +260,25 @@ export function ProjectSites({ projectId, sites, available }: { projectId: numbe
 
   return (
     <div className="flex flex-col gap-3">
-      {sites.length === 0 && <p className="text-sm opacity-70">{t("noSites")}</p>}
-      <ul className="flex flex-col gap-1 text-sm">
-        {sites.map((s) => (
-          <li key={s.id} className="flex flex-wrap items-center gap-2">
-            <span className={`flex-1 ${s.name === null ? "opacity-60" : ""}`}>{s.name ?? t("siteUnavailable")}</span>
-            {confirming === s.id && <span className="text-xs text-amber-700 dark:text-amber-300">{t("removeSiteWithPipeline")}</span>}
-            <Button size="sm" variant="ghost" disabled={flight.busy} onClick={() => void remove(s.id)}>
-              {confirming === s.id ? t("removeSiteAnyway") : t("removeSite")}
-            </Button>
-            {confirming === s.id && (
-              <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
-                {t("cancel")}
+      {hospitals.length === 0 && <p className="text-sm opacity-70">{t("noSites")}</p>}
+      <ul className="flex flex-col gap-2 text-sm">
+        {hospitals.map((h) => (
+          <li key={h.id} className="flex flex-col gap-1 rounded border p-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex-1 font-medium">{h.name}</span>
+              {confirming === h.id && <span className="text-xs text-amber-700 dark:text-amber-300">{t("removeSiteWithPipeline")}</span>}
+              <Button size="sm" variant="ghost" disabled={flight.busy} onClick={() => void remove(h.id)}>
+                {confirming === h.id ? t("removeSiteAnyway") : t("removeSite")}
               </Button>
-            )}
+              {confirming === h.id && (
+                <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+                  {t("cancel")}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs opacity-70">
+              {h.boards.length === 0 ? t("noReadableBoards") : t("boardsList", { names: h.boards.map((b) => b.name).join(", ") })}
+            </p>
           </li>
         ))}
       </ul>

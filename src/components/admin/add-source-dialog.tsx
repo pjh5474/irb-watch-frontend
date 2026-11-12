@@ -1,8 +1,10 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { adminErrorText } from "@/components/admin/error-text";
+import { HOSPITALS_KEY } from "@/components/admin/hospital-admin";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { adminApi } from "@/lib/api/admin";
@@ -13,11 +15,15 @@ import { useSingleFlight } from "@/lib/use-single-flight";
  * no e-IRB site, whose documents an admin uploads by hand. */
 export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (name: string) => void }) {
   const t = useTranslations("admin");
+  const queryClient = useQueryClient();
   const add = useSingleFlight();
   const [kind, setKind] = useState<"site" | "manual">("site");
-  const [form, setForm] = useState({ name: "", url: "", login: "", membersOnly: false });
+  const [form, setForm] = useState({ name: "", url: "", login: "", membersOnly: false, hospital: "" });
   const [error, setError] = useState<string | null>(null);
   const first = useRef<HTMLInputElement>(null);
+  // "" = automatic: the hospital of another board on the same site, else one named like the board.
+  const hospitals = useQuery({ queryKey: HOSPITALS_KEY, queryFn: adminApi.hospitals });
+  const hospitalId = form.hospital ? Number(form.hospital) : null;
 
   useEffect(() => {
     first.current?.focus();
@@ -31,13 +37,24 @@ export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onA
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    // Hospital names are shown to every user: a members-only source never becomes one by itself.
+    if (kind === "manual" && form.membersOnly && hospitalId === null) {
+      setError(t("hospitals.needForMembersOnly"));
+      return;
+    }
     await add.run(async () => {
       try {
         if (kind === "manual") {
-          await adminApi.createManualSource({ name: form.name, members_only: form.membersOnly });
+          await adminApi.createManualSource({ name: form.name, members_only: form.membersOnly, hospital_id: hospitalId });
         } else {
-          await adminApi.createSource({ name: form.name, url: form.url, login_user: form.login.trim() || null });
+          await adminApi.createSource({
+            name: form.name,
+            url: form.url,
+            login_user: form.login.trim() || null,
+            hospital_id: hospitalId,
+          });
         }
+        await queryClient.invalidateQueries({ queryKey: HOSPITALS_KEY });
         onAdded(form.name);
       } catch (e) {
         setError(adminErrorText(e, t));
@@ -124,6 +141,24 @@ export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onA
               </span>
             </label>
           )}
+          <label className="flex flex-col gap-1 text-sm">
+            {t("hospitals.moveTo")}
+            <select
+              className="rounded border px-2 py-1.5"
+              value={form.hospital}
+              onChange={(e) => setForm({ ...form, hospital: e.target.value })}
+            >
+              <option value="">{t("hospitals.automatic")}</option>
+              {[...(hospitals.data?.hospitals ?? [])]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.name}
+                  </option>
+                ))}
+            </select>
+            <span className="text-xs opacity-70">{t("hospitals.automaticHint")}</span>
+          </label>
           {error && (
             <p role="alert" className="text-sm text-red-600">
               {error}

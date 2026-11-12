@@ -52,6 +52,10 @@ vi.mock("@/lib/supabase/client", () => ({
 
 vi.mock("@/lib/api/admin", () => ({
   adminApi: {
+    hospitals: async () => ({
+      hospitals: [{ id: 3, name: "Hanyang", note: "", created_at: "", updated_at: "", boards: [] }],
+      board_kinds: ["notice", "forms", "regulations", "other"],
+    }),
     createSource: async (body: unknown) => {
       state.created.push(body);
       return {};
@@ -160,10 +164,39 @@ describe("AddSourceDialog", () => {
     fireEvent.click(screen.getByRole("radio", { name: /Maintained by hand/ }));
     expect(screen.queryByLabelText(/Address/i)).toBeNull();
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Hanyang IRB" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+    await waitFor(() =>
+      expect(state.manualSources).toEqual([{ name: "Hanyang IRB", members_only: false, hospital_id: null }]),
+    );
+    expect(state.created).toEqual([]);
+  });
+
+  it("a members-only manual source needs a chosen hospital (its name must not become public)", async () => {
+    show(<AddSourceDialog onClose={() => {}} onAdded={() => {}} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Maintained by hand/ }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Sponsor X study" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /Members only/ }));
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
-    await waitFor(() => expect(state.manualSources).toEqual([{ name: "Hanyang IRB", members_only: true }]));
-    expect(state.created).toEqual([]);
+    expect((await screen.findByRole("alert")).textContent).toMatch(/Choose the hospital/);
+    expect(state.manualSources).toEqual([]);
+    await screen.findByRole("option", { name: "Hanyang" });
+    fireEvent.change(screen.getByLabelText(/^Hospital/), { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+    await waitFor(() =>
+      expect(state.manualSources).toEqual([{ name: "Sponsor X study", members_only: true, hospital_id: 3 }]),
+    );
+  });
+
+  it("puts the new board into a chosen hospital", async () => {
+    show(<AddSourceDialog onClose={() => {}} onAdded={() => {}} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Maintained by hand/ }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Hanyang forms" } });
+    await screen.findByRole("option", { name: "Hanyang" });
+    fireEvent.change(screen.getByLabelText(/^Hospital/), { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+    await waitFor(() =>
+      expect(state.manualSources).toEqual([{ name: "Hanyang forms", members_only: false, hospital_id: 3 }]),
+    );
   });
 });
 

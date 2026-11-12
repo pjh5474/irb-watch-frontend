@@ -95,10 +95,9 @@ export function PipelineView({ id }: { id: number }) {
         <Link href={`/projects/${p.project_id}`} className="text-sm underline-offset-4 hover:underline">
           ← {t("backToProject")}
         </Link>
-        <h1 className="text-2xl font-semibold">{t("title", { name: p.source_name ?? t("siteUnavailable") })}</h1>
+        <h1 className="text-2xl font-semibold">{t("title", { name: p.hospital_name ?? t("siteUnavailable") })}</h1>
         <p className="text-sm opacity-70">{t("progress", { closed: p.closed_steps, steps: p.steps })}</p>
         {!p.in_project && <p className="text-sm text-amber-700 dark:text-amber-300">{t("notInProjectNote")}</p>}
-        {p.source_name === null && <p className="text-sm text-amber-700 dark:text-amber-300">{t("noAccessNote")}</p>}
         {removed && (
           <div className="flex flex-wrap items-center gap-2 text-sm text-amber-700 dark:text-amber-300">
             {t("removedNote")}

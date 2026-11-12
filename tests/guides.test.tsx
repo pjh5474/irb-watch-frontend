@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "../messages/en.json";
-import { GuideLibrary, SourceGuides } from "../src/components/admin/guide-library";
+import { GuideLibrary, HospitalGuides } from "../src/components/admin/guide-library";
 import { ApiError } from "../src/lib/api/client";
 import type { Guide } from "../src/lib/api/docgen";
 
@@ -26,11 +26,14 @@ vi.mock("@/i18n/navigation", () => ({
 
 vi.mock("@/lib/api/admin", () => ({
   adminApi: {
-    sources: async () => [
-      { id: 1, name: "Public board", url: "https://www.snuh.org/board/1", is_active: true },
-      { id: 2, name: "Daegu notices", url: "https://www.r-bay.co.kr/a", is_active: true },
-      { id: 3, name: "Ewha forms", url: "https://www.r-bay.co.kr/b", is_active: true },
-    ],
+    hospitals: async () => ({
+      hospitals: [
+        { id: 1, name: "SNUH", note: "", created_at: "", updated_at: "", boards: [{ id: 11, name: "Public board" }] },
+        { id: 2, name: "Daegu Catholic", note: "", created_at: "", updated_at: "", boards: [{ id: 12, name: "Daegu notices" }] },
+        { id: 3, name: "Ewha", note: "", created_at: "", updated_at: "", boards: [{ id: 13, name: "Ewha forms" }] },
+      ],
+      board_kinds: ["notice", "forms", "regulations", "other"],
+    }),
   },
 }));
 
@@ -43,12 +46,12 @@ vi.mock("@/lib/api/docgen", async () => {
       createGuide: async (title: string, file: { filename: string }) => {
         state.created.push({ title, filename: file.filename });
         if (state.createError) throw state.createError;
-        return { id: 9, title, filename: file.filename, chars: 5, source_ids: [], created_at: "", archived_at: null, body_text: "Hello guide" };
+        return { id: 9, title, filename: file.filename, chars: 5, hospital_ids: [], created_at: "", archived_at: null, body_text: "Hello guide" };
       },
       archiveGuide: async (id: number) => {
         state.archived.push(id);
       },
-      sourceGuides: async () => state.linked,
+      hospitalGuides: async () => state.linked,
       linkGuide: async (s: number, g: number) => {
         state.links.push(["link", s, g]);
       },
@@ -59,7 +62,7 @@ vi.mock("@/lib/api/docgen", async () => {
         state.updates.push([id, body]);
         return {};
       },
-      setGuideSources: async (id: number, ids: number[]) => {
+      setGuideHospitals: async (id: number, ids: number[]) => {
         state.siteSets.push([id, ids]);
         return {};
       },
@@ -88,7 +91,7 @@ const guide = (id: number, title: string, extra: Partial<Guide> = {}): Guide => 
   title,
   filename: `${title}.txt`,
   chars: 100,
-  source_ids: [],
+  hospital_ids: [],
   created_at: "",
   archived_at: null,
   ...extra,
@@ -106,7 +109,7 @@ function show(node: React.ReactNode) {
 }
 
 beforeEach(() => {
-  state.guides = [guide(1, "SNUH guide", { source_ids: [1] }), guide(2, "Old guide", { archived_at: "2026-11-01" })];
+  state.guides = [guide(1, "SNUH guide", { hospital_ids: [1] }), guide(2, "Old guide", { archived_at: "2026-11-01" })];
   state.linked = [];
   state.created = [];
   state.archived = [];
@@ -119,10 +122,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("GuideLibrary", () => {
-  it("lists active guides with the sources that use them", async () => {
+  it("lists active guides with the hospitals that use them", async () => {
     show(<GuideLibrary />);
     expect(await screen.findByText("SNUH guide")).toBeTruthy();
-    expect(await screen.findByText("Used by: Public board")).toBeTruthy();
+    expect(await screen.findByText("Used by: SNUH")).toBeTruthy();
     expect(screen.queryByText("Old guide")).toBeNull();
     fireEvent.click(screen.getByLabelText("Show archived guides"));
     expect(await screen.findByText("Old guide")).toBeTruthy();
@@ -170,40 +173,40 @@ describe("GuideLibrary", () => {
     expect(await screen.findByText("The guide now applies to every site.")).toBeTruthy();
   });
 
-  it("a global guide shows 'every site' and cannot have its sites edited", async () => {
-    state.guides = [guide(1, "Common guide", { is_global: true, source_ids: [1] })];
+  it("a global guide shows 'every hospital' and cannot have its hospitals edited", async () => {
+    state.guides = [guide(1, "Common guide", { is_global: true, hospital_ids: [1] })];
     show(<GuideLibrary />);
-    expect(await screen.findByText("Applies to every site (global)")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Edit sites" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByRole("button", { name: "Make site-specific" })).toBeTruthy();
+    expect(await screen.findByText("Applies to every hospital (global)")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Edit hospitals" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Make hospital-specific" })).toBeTruthy();
   });
 
-  it("links one guide to many sites at once, grouped by web address", async () => {
+  it("links one guide to many hospitals at once", async () => {
     show(<GuideLibrary />);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit sites" }));
-    expect(screen.getByText("snuh.org")).toBeTruthy();
-    expect(screen.getByText("r-bay.co.kr")).toBeTruthy();
-    // select the whole R-BAY group with its group box
-    fireEvent.click(screen.getByRole("checkbox", { name: "r-bay.co.kr" }));
-    expect(screen.getByText("3 sites selected")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save sites" }));
+    expect(await screen.findByText("Used by: SNUH")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Edit hospitals" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Daegu Catholic/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Ewha/ }));
+    expect(screen.getByText("3 hospitals selected")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save hospitals" }));
     await waitFor(() => expect(state.siteSets).toEqual([[1, [1, 2, 3]]]));
   });
 
-  it("the site search narrows the list and 'select all shown' picks only those", async () => {
+  it("the search finds hospitals by board name and 'select all shown' picks only those", async () => {
     show(<GuideLibrary />);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit sites" }));
-    fireEvent.change(screen.getByLabelText("Search sites by name or address"), { target: { value: "Daegu" } });
-    expect(screen.queryByText("Public board")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit hospitals" }));
+    fireEvent.change(screen.getByLabelText("Search hospitals or their boards by name"), { target: { value: "notices" } });
+    expect(screen.queryByText("SNUH")).toBeNull();
+    expect(screen.getByText("Daegu Catholic")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Clear all shown" }));
     fireEvent.click(screen.getByRole("button", { name: "Select all shown" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save sites" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save hospitals" }));
     await waitFor(() => expect(state.siteSets).toEqual([[1, [1, 2]]]));
   });
 
   it("filters guides by name and by scope", async () => {
     state.guides = [
-      guide(1, "SNUH guide", { source_ids: [1] }),
+      guide(1, "SNUH guide", { hospital_ids: [1] }),
       guide(4, "Common guide", { is_global: true }),
       guide(5, "Loose guide"),
     ];
@@ -215,7 +218,8 @@ describe("GuideLibrary", () => {
     fireEvent.change(screen.getByLabelText("Show"), { target: { value: "unlinked" } });
     expect(screen.getByText("Loose guide")).toBeTruthy();
     expect(screen.queryByText("Common guide")).toBeNull();
-    fireEvent.change(screen.getByLabelText("Show"), { target: { value: "source:1" } });
+    await screen.findByRole("option", { name: "Used by SNUH" });
+    fireEvent.change(screen.getByLabelText("Show"), { target: { value: "hospital:1" } });
     expect(screen.getByText("SNUH guide")).toBeTruthy();
     expect(screen.getByText("Common guide")).toBeTruthy(); // a global guide applies to every site
     fireEvent.change(screen.getByLabelText("Search guides by name or file"), { target: { value: "snuh" } });
@@ -252,21 +256,22 @@ describe("GuideLibrary", () => {
   });
 });
 
-describe("SourceGuides", () => {
+describe("HospitalGuides", () => {
   it("shows global guides as Global without unlink, and does not offer them for linking", async () => {
     state.linked = [guide(4, "Common guide", { is_global: true })];
     state.guides = [guide(4, "Common guide", { is_global: true }), guide(3, "Extra guide")];
-    show(<SourceGuides sourceId={1} />);
+    show(<HospitalGuides hospitalId={1} hospitalName="SNUH" />);
+    expect(await screen.findByText("Guides of SNUH")).toBeTruthy();
     expect(await screen.findByText("Global")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Unlink" })).toBeNull();
     await screen.findByRole("option", { name: "Extra guide" });
     expect(screen.queryByRole("option", { name: "Common guide" })).toBeNull();
   });
 
-  it("links and unlinks guides for one source", async () => {
+  it("links and unlinks guides for one hospital", async () => {
     state.linked = [guide(1, "SNUH guide")];
     state.guides = [guide(1, "SNUH guide"), guide(3, "Extra guide")];
-    show(<SourceGuides sourceId={1} />);
+    show(<HospitalGuides hospitalId={1} hospitalName="SNUH" />);
     expect(await screen.findByText("SNUH guide")).toBeTruthy();
     const select = screen.getByLabelText("Link a guide");
     await screen.findByRole("option", { name: "Extra guide" });

@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "../messages/en.json";
 import ko from "../messages/ko.json";
-import { NewProjectForm, ProjectSettings, ProjectSites } from "../src/components/projects";
+import { NewProjectForm, ProjectHospitals, ProjectSettings } from "../src/components/projects";
 import { cleanNote, parseView, projectErrorKey, projectProblem } from "../src/lib/projects";
 
 // A tiny stand-in for the Supabase query builder: records each call and answers from `db`.
@@ -13,7 +13,7 @@ const db = vi.hoisted(() => ({
   result: { data: null as unknown, error: null as unknown },
   pushed: [] as string[],
   refreshed: 0,
-  pipelines: [] as { source_id: number }[],
+  pipelines: [] as { hospital_id: number }[],
 }));
 
 vi.mock("@/i18n/navigation", () => ({
@@ -163,41 +163,42 @@ describe("ProjectSettings", () => {
     show(<ProjectSettings id={3} name="Old" note={null} />);
     fireEvent.click(screen.getByRole("button", { name: "Delete project" }));
     expect(db.calls).toEqual([]);
-    expect(screen.getByText(/The sites and documents stay/)).toBeTruthy();
+    expect(screen.getByText(/The hospitals and documents stay/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Delete project" }));
     await waitFor(() => expect(db.pushed).toEqual(["/projects"]));
     expect(db.calls).toEqual(["projects delete id=3"]);
   });
 });
 
-describe("ProjectSites", () => {
-  const sites = [
-    { id: 1, name: "SNUH board" },
-    { id: 9, name: null },
+describe("ProjectHospitals", () => {
+  const hospitals = [
+    { id: 1, name: "SNUH", boards: [{ id: 4, name: "SNUH notices" }, { id: 5, name: "SNUH rules" }] },
+    { id: 9, name: "Kimpo Woori", boards: [] },
   ];
-  const available = [{ id: 2, name: "Other board" }];
+  const available = [{ id: 2, name: "Ewha" }];
 
-  it("lists sites, marks one the user can no longer read, and adds a readable one", async () => {
-    show(<ProjectSites projectId={5} sites={sites} available={available} />);
-    expect(screen.getByText("SNUH board")).toBeTruthy();
-    expect(screen.getByText("Site no longer available to you")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Add a site"), { target: { value: "2" } });
+  it("lists hospitals with their readable boards, and adds any hospital", async () => {
+    show(<ProjectHospitals projectId={5} hospitals={hospitals} available={available} />);
+    expect(screen.getByText("SNUH")).toBeTruthy();
+    expect(screen.getByText("Boards you can read: SNUH notices, SNUH rules")).toBeTruthy();
+    expect(screen.getByText(/No board of this hospital is open to you/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Add a hospital"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect(await screen.findByText("Site added.")).toBeTruthy();
-    expect(db.calls).toEqual(['project_sources insert {"project_id":5,"source_id":2}']);
+    expect(await screen.findByText("Hospital added.")).toBeTruthy();
+    expect(db.calls).toEqual(['project_hospitals insert {"project_id":5,"hospital_id":2}']);
     expect(db.refreshed).toBe(1);
   });
 
-  it("removes a site, even one the user can no longer read", async () => {
-    show(<ProjectSites projectId={5} sites={sites} available={available} />);
+  it("removes a hospital", async () => {
+    show(<ProjectHospitals projectId={5} hospitals={hospitals} available={available} />);
     fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[1]);
-    expect(await screen.findByText("Site removed.")).toBeTruthy();
-    expect(db.calls).toEqual(["project_sources delete project_id=5 source_id=9"]);
+    expect(await screen.findByText("Hospital removed.")).toBeTruthy();
+    expect(db.calls).toEqual(["project_hospitals delete project_id=5 hospital_id=9"]);
   });
 
   it("asks first before removing a hospital that has an IRB pipeline", async () => {
-    db.pipelines = [{ source_id: 9 }];
-    show(<ProjectSites projectId={5} sites={sites} available={available} />);
+    db.pipelines = [{ hospital_id: 9 }];
+    show(<ProjectHospitals projectId={5} hospitals={hospitals} available={available} />);
     await waitFor(() => expect(db.pipelines.length).toBe(1));
     const button = () => screen.getAllByRole("button", { name: /Remove/ })[1];
     await new Promise((r) => setTimeout(r, 0));
@@ -205,8 +206,8 @@ describe("ProjectSites", () => {
     expect(await screen.findByText(/has an IRB pipeline/)).toBeTruthy();
     expect(db.calls).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Remove anyway" }));
-    expect(await screen.findByText("Site removed.")).toBeTruthy();
-    expect(db.calls).toEqual(["project_sources delete project_id=5 source_id=9"]);
+    expect(await screen.findByText("Hospital removed.")).toBeTruthy();
+    expect(db.calls).toEqual(["project_hospitals delete project_id=5 hospital_id=9"]);
     db.pipelines = [];
   });
 
@@ -214,18 +215,23 @@ describe("ProjectSites", () => {
     expect(projectErrorKey({ code: "23503" })).toBe("hasPipelines");
   });
 
-  it("shows the reason when the database refuses a site", async () => {
+  it("shows the reason when the database refuses a hospital", async () => {
     db.result = { data: null, error: { code: "42501", message: "new row violates row-level security policy" } };
-    show(<ProjectSites projectId={5} sites={[]} available={available} />);
-    fireEvent.change(screen.getByLabelText("Add a site"), { target: { value: "2" } });
+    show(<ProjectHospitals projectId={5} hospitals={[]} available={available} />);
+    fireEvent.change(screen.getByLabelText("Add a hospital"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect((await screen.findByRole("alert")).textContent).toMatch(/only add sites you can read/);
+    expect((await screen.findByRole("alert")).textContent).toMatch(/only change your own projects/);
   });
 
-  it("stops offering sites at 30", () => {
-    const thirty = Array.from({ length: 30 }, (_, i) => ({ id: 100 + i, name: `Board ${i}` }));
-    show(<ProjectSites projectId={5} sites={thirty} available={available} />);
-    expect(screen.queryByLabelText("Add a site")).toBeNull();
-    expect(screen.getByText("A project can hold at most 30 sites.")).toBeTruthy();
+  it("stops offering hospitals at 30", () => {
+    const thirty = Array.from({ length: 30 }, (_, i) => ({ id: 100 + i, name: `Hospital ${i}`, boards: [] }));
+    show(<ProjectHospitals projectId={5} hospitals={thirty} available={available} />);
+    expect(screen.queryByLabelText("Add a hospital")).toBeNull();
+    expect(screen.getByText("A project can hold at most 30 hospitals.")).toBeTruthy();
+  });
+
+  it("maps the database's limit message to the right reason", () => {
+    expect(projectErrorKey({ code: "P0001", message: "at most 30 hospitals per project" })).toBe("tooManySites");
+    expect(projectErrorKey({ code: "P0001", message: "at most 50 projects per user" })).toBe("tooManyProjects");
   });
 });

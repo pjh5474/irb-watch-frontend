@@ -34,12 +34,12 @@ export default async function SourcesPage({
   // last_scan_error from users.
   const { data: all, error } = await supabase
     .from("sources")
-    .select("id, name, url, adapter, requires_login, is_active, last_scan_at, last_scan_status")
+    .select("id, name, url, adapter, requires_login, is_active, last_scan_at, last_scan_status, hospital_id")
     .order("name");
   const access = await getAccessState(supabase);
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, name, project_sources(source_id)")
+    .select("id, name, project_hospitals(hospital_id)")
     .order("name");
   if (!access) {
     return (
@@ -52,9 +52,11 @@ export default async function SourcesPage({
     );
   }
 
-  const inProject = new Set(
-    (projects ?? []).find((p) => p.id === projectId)?.project_sources.map((l) => l.source_id) ?? [],
+  // A project lists hospitals; a board is "in the project" when its hospital is.
+  const projectHospitals = new Set(
+    (projects ?? []).find((p) => p.id === projectId)?.project_hospitals.map((l) => l.hospital_id) ?? [],
   );
+  const inProject = new Set((all ?? []).filter((s) => projectHospitals.has(s.hospital_id)).map((s) => s.id));
   const term = q.toLowerCase();
   const matching = (all ?? []).filter((s) => {
     if (term && !s.name.toLowerCase().includes(term)) return false;

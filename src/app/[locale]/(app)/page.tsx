@@ -35,17 +35,22 @@ export default async function FeedPage({
   // Explicit safe columns: RLS cannot hide sources.config / last_scan_error from users.
   const { data: sources, error: sourcesError } = await supabase
     .from("sources")
-    .select("id, name, adapter, is_active, last_scan_at, last_scan_status")
+    .select("id, name, adapter, is_active, last_scan_at, last_scan_status, hospital_id")
     .order("name");
   const names = new Map((sources ?? []).map((s) => [s.id, s.name]));
 
-  // The user's own projects (row-level security), for the "only my project's sites" filter.
+  // The user's own projects (row-level security), for the "only my project's sites" filter. A
+  // project lists hospitals: its sites are the readable boards of those hospitals.
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, name, project_sources(source_id)")
+    .select("id, name, project_hospitals(hospital_id)")
     .order("name");
   const project = (projects ?? []).find((p) => p.id === filters.project);
-  const allowed = allowedSources(filters, project ? project.project_sources.map((l) => l.source_id) : null);
+  const projectHospitals = new Set(project ? project.project_hospitals.map((l) => l.hospital_id) : []);
+  const allowed = allowedSources(
+    filters,
+    project ? (sources ?? []).filter((s) => projectHospitals.has(s.hospital_id)).map((s) => s.id) : null,
+  );
   const from = since(filters.days);
 
   // The changes, filtered in the database. One query returns the page and the total; a page past

@@ -32,7 +32,7 @@ const TEMPLATE: FormTemplate = {
   filename: "amend.docx",
   is_global: false,
   status: "ready",
-  source_ids: [1],
+  hospital_ids: [1],
   fields: [TEXT, CHOICE],
   created_at: "2026-11-11T00:00:00Z",
   updated_at: "2026-11-11T00:00:00Z",
@@ -68,7 +68,12 @@ vi.mock("@/lib/draft-picker", async () => ({
 }));
 
 vi.mock("@/lib/api/admin", () => ({
-  adminApi: { sources: async () => [{ id: 1, name: "Public board", url: "https://www.snuh.org/1", is_active: true }] },
+  adminApi: {
+    hospitals: async () => ({
+      hospitals: [{ id: 1, name: "SNUH", note: "", created_at: "", updated_at: "", boards: [{ id: 11, name: "Public board" }] }],
+      board_kinds: ["notice", "forms", "regulations", "other"],
+    }),
+  },
 }));
 
 vi.mock("@/lib/api/docgen", async () => {

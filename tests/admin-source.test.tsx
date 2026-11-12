@@ -34,6 +34,10 @@ vi.mock("@/lib/api/admin", async () => {
     ...actual,
     adminApi: {
       sources: async () => [api.source],
+      hospitals: async () => ({
+        hospitals: [{ id: 7, name: "SNUH", note: "", created_at: "", updated_at: "", boards: [] }],
+        board_kinds: ["notice", "forms", "regulations", "other"],
+      }),
       updateSource: async (...a: unknown[]) => {
         api.calls.push(["updateSource", ...a]);
         return api.source;
@@ -85,6 +89,8 @@ const STUDY: Source = {
   requires_login: true,
   scans_paused_reason: null,
   ai_enabled: false,
+  hospital_id: 7,
+  board_kind: "other",
 };
 
 function show(id = 5) {

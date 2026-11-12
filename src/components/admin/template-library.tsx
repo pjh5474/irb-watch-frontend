@@ -4,8 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileSpreadsheet, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
-import { SOURCES_KEY } from "@/components/admin/admin-sources";
 import { adminErrorText } from "@/components/admin/error-text";
+import { HOSPITALS_KEY } from "@/components/admin/hospital-admin";
 import { Section } from "@/components/admin/section";
 import { TemplateCard } from "@/components/admin/template-card";
 import { Button } from "@/components/ui/button";
@@ -26,11 +26,14 @@ export function TemplateLibrary() {
     queryKey: [...TEMPLATES_KEY, showArchived],
     queryFn: () => docgenApi.adminTemplates(showArchived),
   });
-  const sources = useQuery({ queryKey: SOURCES_KEY, queryFn: adminApi.sources });
-  const names = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s.name])), [sources.data]);
-  const sortedSources = useMemo(
-    () => [...(sources.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
-    [sources.data],
+  const hospitals = useQuery({ queryKey: HOSPITALS_KEY, queryFn: adminApi.hospitals });
+  const names = useMemo(
+    () => new Map((hospitals.data?.hospitals ?? []).map((h) => [h.id, h.name])),
+    [hospitals.data],
+  );
+  const sortedHospitals = useMemo(
+    () => [...(hospitals.data?.hospitals ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [hospitals.data],
   );
 
   const upload = useSingleFlight();
@@ -148,7 +151,7 @@ export function TemplateLibrary() {
         {!!templates.data?.length && shown.length === 0 && <p className="text-sm opacity-70">{t("templates.noMatch")}</p>}
         <ul className="flex flex-col divide-y">
           {shown.map((x) => (
-            <TemplateCard key={x.id} template={x} sources={sortedSources} names={names} onChanged={refresh} />
+            <TemplateCard key={x.id} template={x} hospitals={sortedHospitals} names={names} onChanged={refresh} />
           ))}
         </ul>
       </Section>

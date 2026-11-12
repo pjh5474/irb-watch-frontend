@@ -4,10 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
-import { SOURCES_KEY } from "@/components/admin/admin-sources";
 import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
 import { filterGuides, GuideCard, type GuideFilter } from "@/components/admin/guide-card";
+import { HOSPITALS_KEY } from "@/components/admin/hospital-admin";
 import { Section } from "@/components/admin/section";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -41,11 +41,14 @@ export function GuideLibrary() {
     queryKey: [...GUIDES_KEY, showArchived],
     queryFn: () => docgenApi.guides(showArchived),
   });
-  const sources = useQuery({ queryKey: SOURCES_KEY, queryFn: adminApi.sources });
-  const names = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s.name])), [sources.data]);
-  const sortedSources = useMemo(
-    () => [...(sources.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
-    [sources.data],
+  const hospitals = useQuery({ queryKey: HOSPITALS_KEY, queryFn: adminApi.hospitals });
+  const names = useMemo(
+    () => new Map((hospitals.data?.hospitals ?? []).map((h) => [h.id, h.name])),
+    [hospitals.data],
+  );
+  const sortedHospitals = useMemo(
+    () => [...(hospitals.data?.hospitals ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [hospitals.data],
   );
 
   const upload = useSingleFlight();
@@ -61,7 +64,7 @@ export function GuideLibrary() {
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: GUIDES_KEY });
     await queryClient.invalidateQueries({ queryKey: DEFAULT_GUIDES_KEY });
-    await queryClient.invalidateQueries({ queryKey: ["admin", "source-guides"] });
+    await queryClient.invalidateQueries({ queryKey: ["admin", "hospital-guides"] });
     await queryClient.invalidateQueries({ queryKey: ["admin", "guide-text"] });
     await queryClient.invalidateQueries({ queryKey: ["admin", "guide-history"] });
   }
@@ -177,9 +180,9 @@ export function GuideLibrary() {
               <option value="all">{t("guides.scopeAll")}</option>
               <option value="global">{t("guides.scopeGlobal")}</option>
               <option value="unlinked">{t("guides.scopeUnlinked")}</option>
-              {sortedSources.map((s) => (
-                <option key={s.id} value={`source:${s.id}`}>
-                  {t("guides.scopeSource", { name: s.name })}
+              {sortedHospitals.map((h) => (
+                <option key={h.id} value={`hospital:${h.id}`}>
+                  {t("guides.scopeSource", { name: h.name })}
                 </option>
               ))}
             </select>
@@ -199,7 +202,7 @@ export function GuideLibrary() {
         {!!guides.data?.length && shown.length === 0 && <p className="text-sm opacity-70">{t("guides.noMatch")}</p>}
         <ul className="flex flex-col divide-y">
           {shown.map((g) => (
-            <GuideCard key={g.id} guide={g} sources={sortedSources} names={names} onChanged={refresh} />
+            <GuideCard key={g.id} guide={g} hospitals={sortedHospitals} names={names} onChanged={refresh} />
           ))}
         </ul>
       </Section>
@@ -207,11 +210,12 @@ export function GuideLibrary() {
   );
 }
 
-export function SourceGuides({ sourceId }: { sourceId: number }) {
+/** The default guides of one hospital (shown on each of its boards' admin pages). */
+export function HospitalGuides({ hospitalId, hospitalName }: { hospitalId: number; hospitalName: string }) {
   const t = useTranslations("admin");
   const queryClient = useQueryClient();
-  const key = ["admin", "source-guides", sourceId];
-  const linked = useQuery({ queryKey: key, queryFn: () => docgenApi.sourceGuides(sourceId) });
+  const key = ["admin", "hospital-guides", hospitalId];
+  const linked = useQuery({ queryKey: key, queryFn: () => docgenApi.hospitalGuides(hospitalId) });
   const library = useQuery({ queryKey: [...GUIDES_KEY, false], queryFn: () => docgenApi.guides(false) });
   const flight = useSingleFlight();
   const [choice, setChoice] = useState("");
@@ -225,8 +229,8 @@ export function SourceGuides({ sourceId }: { sourceId: number }) {
     setMessage(null);
     await flight.run(async () => {
       try {
-        if (action === "link") await docgenApi.linkGuide(sourceId, guideId);
-        else await docgenApi.unlinkGuide(sourceId, guideId);
+        if (action === "link") await docgenApi.linkGuide(hospitalId, guideId);
+        else await docgenApi.unlinkGuide(hospitalId, guideId);
         setChoice("");
         setMessage({ kind: "ok", text: t(action === "link" ? "guides.linked" : "guides.unlinked") });
         await queryClient.invalidateQueries({ queryKey: key });
@@ -239,7 +243,7 @@ export function SourceGuides({ sourceId }: { sourceId: number }) {
   }
 
   return (
-    <Section icon={BookOpen} accent="violet" title={t("guides.sourceTitle")}>
+    <Section icon={BookOpen} accent="violet" title={t("guides.sourceTitle", { name: hospitalName })}>
       <p className="text-sm opacity-80">{t("guides.sourceHint")}</p>
       {linked.isLoading && <p className="text-sm opacity-70">{t("loading")}</p>}
       {linked.isError && (

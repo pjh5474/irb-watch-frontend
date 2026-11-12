@@ -2,7 +2,7 @@ import { getFormatter, getTranslations, setRequestLocale } from "next-intl/serve
 import { notFound } from "next/navigation";
 import { Pagination } from "@/components/pagination";
 import { ProjectPipelines } from "@/components/pipelines/project-pipelines";
-import { ProjectSettings, ProjectSites, type SiteRow } from "@/components/projects";
+import { type HospitalRow, ProjectHospitals, ProjectSettings } from "@/components/projects";
 import { Link } from "@/i18n/navigation";
 import { pageCount, parsePage } from "@/lib/paging";
 import { parseView, PROJECT_PAGE_SIZE, TIMELINE_TYPES } from "@/lib/projects";
@@ -31,7 +31,7 @@ export default async function ProjectPage({
   // Row-level security: another user's project simply comes back empty.
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("id, name, note, project_sources(source_id, added_at, sources(id, name))")
+    .select("id, name, note, project_hospitals(hospital_id, added_at, hospitals(id, name))")
     .eq("id", projectId)
     .maybeSingle();
   if (projectError) {
@@ -45,16 +45,25 @@ export default async function ProjectPage({
   }
   if (!project) notFound();
 
-  const links = [...project.project_sources].sort((a, b) => a.added_at.localeCompare(b.added_at));
-  const sites: SiteRow[] = links.map((l) => ({ id: l.source_id, name: l.sources?.name ?? null }));
-  const siteName = new Map(sites.map((s) => [s.id, s.name]));
-  // Only sites the user can still read; the rest show as "no longer available".
-  const readableIds = links.flatMap((l) => (l.sources ? [l.source_id] : []));
+  // The project lists hospitals; their boards are read through the normal board rules (RLS
+  // returns only boards the user may read), so a hospital may show no board at all.
+  const links = [...project.project_hospitals].sort((a, b) => a.added_at.localeCompare(b.added_at));
+  const hospitalIds = links.map((l) => l.hospital_id);
+  const { data: boards, error: boardsError } = hospitalIds.length
+    ? await supabase.from("sources").select("id, name, hospital_id").in("hospital_id", hospitalIds).order("name")
+    : { data: [], error: null };
+  const hospitals: HospitalRow[] = links.map((l) => ({
+    id: l.hospital_id,
+    name: l.hospitals?.name ?? "",
+    boards: (boards ?? []).filter((b) => b.hospital_id === l.hospital_id).map((b) => ({ id: b.id, name: b.name })),
+  }));
+  const siteName = new Map((boards ?? []).map((b) => [b.id, b.name]));
+  const readableIds = (boards ?? []).map((b) => b.id);
 
-  // Readable sites not yet in the project, for the "add a site" list.
-  const { data: allSources } = await supabase.from("sources").select("id, name").order("name");
-  const linked = new Set(sites.map((s) => s.id));
-  const available = (allSources ?? []).filter((s) => !linked.has(s.id));
+  // Every hospital not yet in the project, for the "add a hospital" list (any hospital may be added).
+  const { data: allHospitals } = await supabase.from("hospitals").select("id, name").order("name");
+  const linked = new Set(hospitalIds);
+  const available = (allHospitals ?? []).filter((h) => !linked.has(h.id));
 
   const from = (page - 1) * PROJECT_PAGE_SIZE;
   const to = from + PROJECT_PAGE_SIZE - 1;
@@ -64,8 +73,10 @@ export default async function ProjectPage({
   let total = 0;
   let listError = false;
 
-  if (readableIds.length === 0) {
-    body = <p className="text-sm opacity-70">{t("addSitesFirst")}</p>;
+  if (boardsError) {
+    listError = true;
+  } else if (readableIds.length === 0) {
+    body = <p className="text-sm opacity-70">{t(hospitalIds.length ? "noReadableBoardsInProject" : "addSitesFirst")}</p>;
   } else if (view === "documents") {
     // Newest change first, as on a source page (latest_version_id only grows).
     const { data: docs, count, error } = await supabase
@@ -177,12 +188,12 @@ export default async function ProjectPage({
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">{t("sitesTitle")}</h2>
-        <ProjectSites projectId={projectId} sites={sites} available={available} />
+        <ProjectHospitals projectId={projectId} hospitals={hospitals} available={available} />
       </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">{t("pipelinesTitle")}</h2>
-        <ProjectPipelines projectId={projectId} sites={sites} />
+        <ProjectPipelines projectId={projectId} hospitals={hospitals.map((h) => ({ id: h.id, name: h.name }))} />
       </section>
 
       <section className="flex flex-col gap-3">

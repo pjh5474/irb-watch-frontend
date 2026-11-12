@@ -37,7 +37,8 @@ export type ProjectErrorKey =
 export function projectErrorKey(error: unknown): ProjectErrorKey {
   const e = (error ?? {}) as { code?: string; message?: string };
   if (e.code === "23505") return "nameTaken";
-  if (e.code === "P0001") return /sites/.test(e.message ?? "") ? "tooManySites" : "tooManyProjects";
+  // "at most 30 hospitals per project" (was "... sites ..." before hospitals, 2026-11-12).
+  if (e.code === "P0001") return /hospitals|sites/.test(e.message ?? "") ? "tooManySites" : "tooManyProjects";
   if (e.code === "42501") return "notAllowed";
   if (e.code === "23514") return "invalid";
   // 23503: a project with IRB pipelines (removed ones too, until purged) cannot be deleted.

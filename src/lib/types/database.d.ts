@@ -543,6 +543,33 @@ export type Database = {
           },
         ]
       }
+      hospitals: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: number
+          name: string
+          note: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: never
+          name: string
+          note?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: never
+          name?: string
+          note?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       mail_claims: {
         Row: {
           created_at: string
@@ -614,35 +641,35 @@ export type Database = {
         }
         Relationships: []
       }
-      project_sources: {
+      project_hospitals: {
         Row: {
           added_at: string
+          hospital_id: number
           project_id: number
-          source_id: number
         }
         Insert: {
           added_at?: string
+          hospital_id: number
           project_id: number
-          source_id: number
         }
         Update: {
           added_at?: string
+          hospital_id?: number
           project_id?: number
-          source_id?: number
         }
         Relationships: [
           {
-            foreignKeyName: "project_sources_project_id_fkey"
+            foreignKeyName: "project_hospitals_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "project_sources_source_id_fkey"
-            columns: ["source_id"]
+            foreignKeyName: "project_hospitals_hospital_id_fkey"
+            columns: ["hospital_id"]
             isOneToOne: false
-            referencedRelation: "sources"
+            referencedRelation: "hospitals"
             referencedColumns: ["id"]
           },
         ]
@@ -823,9 +850,11 @@ export type Database = {
         Row: {
           adapter: string
           ai_enabled: boolean
+          board_kind: string
           config: Json
           created_at: string
           created_by: string | null
+          hospital_id: number
           id: number
           is_active: boolean
           last_scan_at: string | null
@@ -841,9 +870,11 @@ export type Database = {
         Insert: {
           adapter: string
           ai_enabled?: boolean
+          board_kind?: string
           config?: Json
           created_at?: string
           created_by?: string | null
+          hospital_id: number
           id?: never
           is_active?: boolean
           last_scan_at?: string | null
@@ -859,9 +890,11 @@ export type Database = {
         Update: {
           adapter?: string
           ai_enabled?: boolean
+          board_kind?: string
           config?: Json
           created_at?: string
           created_by?: string | null
+          hospital_id?: number
           id?: never
           is_active?: boolean
           last_scan_at?: string | null
@@ -880,6 +913,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sources_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitals"
             referencedColumns: ["id"]
           },
         ]

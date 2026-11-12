@@ -7,14 +7,15 @@ import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import type { AdminSource } from "@/lib/api/admin";
+import type { AdminHospital } from "@/lib/api/admin";
 import { docgenApi, guideFileProblem, toUpload, type Guide } from "@/lib/api/docgen";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 // One guide in the library: what it applies to, and the admin's tools for it (view the text,
-// choose its sites, make it global, rename, replace the file, see earlier texts, archive).
+// choose its hospitals, make it global, rename, replace the file, see earlier texts, archive).
+// Guides are linked to hospitals (2026-11-12): a hospital's guide applies to all its boards.
 
-export type GuideFilter = { text: string; scope: "all" | "global" | "unlinked" | `source:${number}` };
+export type GuideFilter = { text: string; scope: "all" | "global" | "unlinked" | `hospital:${number}` };
 
 /** Guides matching the name search and the scope filter. */
 export function filterGuides(guides: Guide[], filter: GuideFilter): Guide[] {
@@ -22,30 +23,13 @@ export function filterGuides(guides: Guide[], filter: GuideFilter): Guide[] {
   return guides.filter((g) => {
     if (q && !g.title.toLowerCase().includes(q) && !g.filename.toLowerCase().includes(q)) return false;
     if (filter.scope === "global") return !!g.is_global;
-    if (filter.scope === "unlinked") return !g.is_global && g.source_ids.length === 0;
-    if (filter.scope.startsWith("source:")) {
-      const id = Number(filter.scope.slice(7));
-      return !!g.is_global || g.source_ids.includes(id);
+    if (filter.scope === "unlinked") return !g.is_global && g.hospital_ids.length === 0;
+    if (filter.scope.startsWith("hospital:")) {
+      const id = Number(filter.scope.slice(9));
+      return !!g.is_global || g.hospital_ids.includes(id);
     }
     return true;
   });
-}
-
-/** Sites grouped by their web address host (R-BAY hospitals share one host), names sorted. */
-export function groupByHost<S extends Pick<AdminSource, "name" | "url">>(sources: S[]): [string, S[]][] {
-  const groups = new Map<string, S[]>();
-  for (const s of sources) {
-    let host = "";
-    try {
-      host = new URL(s.url).host.replace(/^www\./, "");
-    } catch {
-      host = "";
-    }
-    groups.set(host, [...(groups.get(host) ?? []), s]);
-  }
-  return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([host, list]) => [host, [...list].sort((x, y) => x.name.localeCompare(y.name))]);
 }
 
 type Mode = null | "text" | "sites" | "rename" | "replace" | "history" | "archive";
@@ -53,12 +37,12 @@ type Message = { kind: "ok" | "error"; text: string } | null;
 
 export function GuideCard({
   guide,
-  sources,
+  hospitals,
   names,
   onChanged,
 }: {
   guide: Guide;
-  sources: AdminSource[];
+  hospitals: AdminHospital[];
   names: Map<number, string>;
   onChanged: () => Promise<void>;
 }) {
@@ -110,8 +94,8 @@ export function GuideCard({
       <p className="text-xs opacity-80">
         {guide.is_global
           ? t("guides.appliesAll")
-          : guide.source_ids.length
-            ? t("guides.linkedTo", { names: guide.source_ids.map((s) => names.get(s) ?? `#${s}`).join(", ") })
+          : guide.hospital_ids.length
+            ? t("guides.linkedTo", { names: guide.hospital_ids.map((h) => names.get(h) ?? `#${h}`).join(", ") })
             : t("guides.notLinked")}
       </p>
       <div className="flex flex-wrap gap-1">
@@ -143,12 +127,12 @@ export function GuideCard({
 
       {mode === "text" && <GuideText id={guide.id} />}
       {mode === "sites" && (
-        <SiteChecklist
-          sources={sources}
-          initial={guide.source_ids}
+        <HospitalChecklist
+          hospitals={hospitals}
+          initial={guide.hospital_ids}
           busy={flight.busy}
           onCancel={() => setMode(null)}
-          onSave={(ids) => run(() => docgenApi.setGuideSources(guide.id, ids), t("guides.sitesSaved", { n: ids.length }))}
+          onSave={(ids) => run(() => docgenApi.setGuideHospitals(guide.id, ids), t("guides.sitesSaved", { n: ids.length }))}
         />
       )}
       {mode === "rename" && (
@@ -282,14 +266,15 @@ function ReplaceBox({ busy, onSave, onError }: { busy: boolean; onSave: (file: F
   );
 }
 
-export function SiteChecklist({
-  sources,
+/** Pick hospitals (searchable by hospital or board name). */
+export function HospitalChecklist({
+  hospitals,
   initial,
   busy,
   onSave,
   onCancel,
 }: {
-  sources: AdminSource[];
+  hospitals: AdminHospital[];
   initial: number[];
   busy: boolean;
   onSave: (ids: number[]) => void;
@@ -299,8 +284,9 @@ export function SiteChecklist({
   const [picked, setPicked] = useState<Set<number>>(new Set(initial));
   const [search, setSearch] = useState("");
   const q = search.trim().toLowerCase();
-  const shown = sources.filter((s) => !q || s.name.toLowerCase().includes(q) || s.url.toLowerCase().includes(q));
-  const groups = groupByHost(shown);
+  const shown = [...hospitals]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .filter((h) => !q || h.name.toLowerCase().includes(q) || h.boards.some((b) => b.name.toLowerCase().includes(q)));
 
   const set = (ids: number[], on: boolean) => {
     const next = new Set(picked);
@@ -326,29 +312,15 @@ export function SiteChecklist({
           {t("guides.clearShown")}
         </Button>
       </div>
-      <div className="flex max-h-80 flex-col gap-3 overflow-y-auto">
-        {groups.length === 0 && <p className="opacity-70">{t("guides.noSites")}</p>}
-        {groups.map(([host, list]) => {
-          const all = list.every((s) => picked.has(s.id));
-          return (
-            <fieldset key={host} className="flex flex-col gap-1">
-              <legend className="flex items-center gap-2 font-medium">
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={all} onChange={(e) => set(list.map((s) => s.id), e.target.checked)} />
-                  {host || t("guides.otherHost")}
-                </label>
-                <span className="text-xs opacity-60">{t("guides.groupCount", { n: list.filter((s) => picked.has(s.id)).length, total: list.length })}</span>
-              </legend>
-              {list.map((s) => (
-                <label key={s.id} className="flex items-center gap-2 pl-6">
-                  <input type="checkbox" checked={picked.has(s.id)} onChange={(e) => set([s.id], e.target.checked)} />
-                  <span className="break-words">{s.name}</span>
-                  {!s.is_active && <span className="text-xs opacity-60">{t("guides.inactive")}</span>}
-                </label>
-              ))}
-            </fieldset>
-          );
-        })}
+      <div className="flex max-h-80 flex-col gap-1 overflow-y-auto">
+        {shown.length === 0 && <p className="opacity-70">{t("guides.noSites")}</p>}
+        {shown.map((h) => (
+          <label key={h.id} className="flex items-center gap-2">
+            <input type="checkbox" checked={picked.has(h.id)} onChange={(e) => set([h.id], e.target.checked)} />
+            <span className="break-words">{h.name}</span>
+            <span className="text-xs opacity-60">{t("hospitals.boardCount", { n: h.boards.length })}</span>
+          </label>
+        ))}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs opacity-80">{t("guides.selectedCount", { n: picked.size })}</span>

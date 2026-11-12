@@ -11,11 +11,11 @@ export default async function ProjectsPage({ params }: { params: Promise<{ local
   const format = await getFormatter();
   const supabase = await createClient();
 
-  // Row-level security returns only the user's own projects. A site the user can no longer read
-  // comes back without its source row (sources RLS), so it shows as "no longer available".
+  // Row-level security returns only the user's own projects. Hospital names are readable by
+  // every signed-in user.
   const { data: projects, error } = await supabase
     .from("projects")
-    .select("id, name, note, updated_at, project_sources(source_id, sources(name))")
+    .select("id, name, note, updated_at, project_hospitals(hospital_id, hospitals(name))")
     .order("updated_at", { ascending: false });
 
   const full = (projects?.length ?? 0) >= MAX_PROJECTS;
@@ -36,7 +36,7 @@ export default async function ProjectsPage({ params }: { params: Promise<{ local
 
       <ul className="flex flex-col gap-3">
         {projects?.map((p, index) => {
-          const names = p.project_sources.map((l) => l.sources?.name ?? t("siteUnavailable"));
+          const names = p.project_hospitals.map((l) => l.hospitals?.name ?? t("siteUnavailable"));
           return (
             <li key={p.id} className="reveal rounded border p-4" style={{ "--i": index } as React.CSSProperties}>
               <h2 className="font-medium">

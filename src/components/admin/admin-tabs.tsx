@@ -9,6 +9,7 @@ export function AdminTabs() {
   const pathname = usePathname();
   const tabs = [
     { href: "/admin/sources", label: t("tabs.sources"), active: pathname.startsWith("/admin/sources") },
+    { href: "/admin/hospitals", label: t("tabs.hospitals"), active: pathname.startsWith("/admin/hospitals") },
     { href: "/admin/reviews", label: t("tabs.reviews"), active: pathname.startsWith("/admin/reviews") },
     { href: "/admin/guides", label: t("tabs.guides"), active: pathname.startsWith("/admin/guides") },
     { href: "/admin/templates", label: t("tabs.templates"), active: pathname.startsWith("/admin/templates") },

@@ -10,10 +10,10 @@ export type Guide = {
   title: string;
   filename: string;
   chars: number;
-  source_ids: number[];
+  hospital_ids: number[];
   created_at: string;
   archived_at: string | null;
-  // A default of every draft for every site; source_ids are unused while true. Older servers
+  // A default of every draft for every hospital; hospital_ids are unused while true. Older servers
   // do not send these.
   is_global?: boolean;
   text_updated_at?: string | null;
@@ -92,7 +92,7 @@ export type FormTemplate = {
   filename: string;
   is_global: boolean;
   status: "review" | "ready";
-  source_ids: number[];
+  hospital_ids: number[];
   fields: FormField[];
   created_at: string;
   updated_at: string;
@@ -196,14 +196,14 @@ export const docgenApi = {
   replaceGuideFile: (id: number, file: UploadFile) =>
     apiFetch<GuideWithText>(`/admin/guides/${id}/file`, json("PUT", { file })),
   guideHistory: (id: number) => apiFetch<GuideRevision[]>(`/admin/guides/${id}/history`),
-  // The full list of sites that use the guide (replaces the current one).
-  setGuideSources: (id: number, sourceIds: number[]) =>
-    apiFetch<Guide>(`/admin/guides/${id}/sources`, json("PUT", { source_ids: sourceIds })),
-  sourceGuides: (sourceId: number) => apiFetch<Guide[]>(`/admin/sources/${sourceId}/guides`),
-  linkGuide: (sourceId: number, guideId: number) =>
-    apiFetch<void>(`/admin/sources/${sourceId}/guides/${guideId}`, { method: "PUT" }),
-  unlinkGuide: (sourceId: number, guideId: number) =>
-    apiFetch<void>(`/admin/sources/${sourceId}/guides/${guideId}`, { method: "DELETE" }),
+  // The full list of hospitals that use the guide (replaces the current one).
+  setGuideHospitals: (id: number, hospitalIds: number[]) =>
+    apiFetch<Guide>(`/admin/guides/${id}/hospitals`, json("PUT", { hospital_ids: hospitalIds })),
+  hospitalGuides: (hospitalId: number) => apiFetch<Guide[]>(`/admin/hospitals/${hospitalId}/guides`),
+  linkGuide: (hospitalId: number, guideId: number) =>
+    apiFetch<void>(`/admin/hospitals/${hospitalId}/guides/${guideId}`, { method: "PUT" }),
+  unlinkGuide: (hospitalId: number, guideId: number) =>
+    apiFetch<void>(`/admin/hospitals/${hospitalId}/guides/${guideId}`, { method: "DELETE" }),
 
   // admin: form templates
   adminTemplates: (includeArchived = false) =>
@@ -217,8 +217,8 @@ export const docgenApi = {
     apiFetch<FormTemplate>(`/admin/templates/${id}`, json("PATCH", body)),
   replaceTemplateFile: (id: number, file: UploadFile) =>
     apiFetch<FormTemplate>(`/admin/templates/${id}/file`, json("PUT", { file })),
-  setTemplateSources: (id: number, sourceIds: number[]) =>
-    apiFetch<FormTemplate>(`/admin/templates/${id}/sources`, json("PUT", { source_ids: sourceIds })),
+  setTemplateHospitals: (id: number, hospitalIds: number[]) =>
+    apiFetch<FormTemplate>(`/admin/templates/${id}/hospitals`, json("PUT", { hospital_ids: hospitalIds })),
   archiveTemplate: (id: number) => apiFetch<void>(`/admin/templates/${id}`, { method: "DELETE" }),
 };
 

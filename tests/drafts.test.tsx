@@ -93,7 +93,7 @@ vi.mock("@/lib/api/docgen", async () => {
           ? new Promise(() => {})
           : Promise.resolve(
               ids.includes(1)
-                ? [{ id: 5, title: "SNUH guide", filename: "g.txt", chars: 120, source_ids: [1], created_at: "", archived_at: null }]
+                ? [{ id: 5, title: "SNUH guide", filename: "g.txt", chars: 120, hospital_ids: [1], created_at: "", archived_at: null }]
                 : [],
             ),
       create: async (body: unknown) => {
@@ -146,7 +146,7 @@ const DETAIL: DraftDetail = {
     { version_no: 1, markdown: "# Old draft", origin: "ai", instruction: "", created_at: "2026-11-10T00:00:00Z" },
     { version_no: 2, markdown: "# New draft", origin: "user_edit", instruction: "", created_at: "2026-11-10T01:00:00Z" },
   ],
-  guides: [{ id: 5, title: "SNUH guide", filename: "g.txt", chars: 120, source_ids: [1], created_at: "", archived_at: null }],
+  guides: [{ id: 5, title: "SNUH guide", filename: "g.txt", chars: 120, hospital_ids: [1], created_at: "", archived_at: null }],
 };
 
 beforeEach(() => {
@@ -236,7 +236,7 @@ describe("helpers", () => {
     const d = structuredClone(DETAIL);
     d.guides = [];
     d.draft.guide_ids = [];
-    const g = (id: number) => ({ id, title: `G${id}`, filename: "", chars: 1, source_ids: [], created_at: "", archived_at: null });
+    const g = (id: number) => ({ id, title: `G${id}`, filename: "", chars: 1, hospital_ids: [], created_at: "", archived_at: null });
     const state = startPanel(d, new Map([[10, "Consent form"]]));
     expect(state.chosen[0]).toMatchObject({ id: 10, title: "Consent form", files: null, page_text: true });
     // guide 5 was a default the user left out; guide 7 comes with a newly added source

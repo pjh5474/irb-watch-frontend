@@ -7,8 +7,9 @@ import { useState } from "react";
 import { SOURCES_KEY } from "@/components/admin/admin-sources";
 import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
-import { SourceGuides } from "@/components/admin/guide-library";
+import { HospitalGuides } from "@/components/admin/guide-library";
 import { HealthLight } from "@/components/admin/health-light";
+import { HOSPITALS_KEY } from "@/components/admin/hospital-admin";
 import { ManualDocuments } from "@/components/admin/manual-documents";
 import { LOGINS_KEY, LoginBadge, loginStateOf, useStoredLogins } from "@/components/admin/login-badge";
 import { Section } from "@/components/admin/section";
@@ -46,6 +47,21 @@ export function AdminSource({ id }: { id: number }) {
     refetchInterval: (q) => (q.state.data?.some((s) => s.scan_in_progress) ? 4000 : false),
   });
   const source = query.data?.find((s) => s.id === id);
+  const hospitals = useQuery({ queryKey: HOSPITALS_KEY, queryFn: adminApi.hospitals });
+  const hospital = hospitals.data?.hospitals.find((h) => h.id === source?.hospital_id);
+  const guides = hospital ? <HospitalGuides hospitalId={hospital.id} hospitalName={hospital.name} /> : null;
+  const placement = source && (
+    <p className="text-sm">
+      {hospital
+        ? t("hospitals.boardOf", { name: hospital.name, kind: t(`hospitals.kinds.${source.board_kind}`) })
+        : hospitals.isError
+          ? adminErrorText(hospitals.error, t)
+          : t("loading")}{" "}
+      <Link href="/admin/hospitals" className="underline underline-offset-4">
+        {t("hospitals.change")}
+      </Link>
+    </p>
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
@@ -62,19 +78,21 @@ export function AdminSource({ id }: { id: number }) {
       {source && isManual(source) && (
         <>
           <Settings source={source} />
+          {placement}
           <ManualDocuments source={source} />
           <AiSwitch source={source} />
           {source.requires_login && <Members source={source} />}
-          <SourceGuides sourceId={source.id} />
+          {guides}
         </>
       )}
       {source && !isManual(source) && (
         <>
           <Settings source={source} />
+          {placement}
           <AiSwitch source={source} />
           {source.login_user ? <Account source={source} /> : <MakeMembersOnly source={source} />}
           {source.requires_login && <Members source={source} />}
-          <SourceGuides sourceId={source.id} />
+          {guides}
         </>
       )}
     </main>

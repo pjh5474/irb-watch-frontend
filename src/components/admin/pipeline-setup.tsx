@@ -4,9 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Flag, ListOrdered, Workflow, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
-import { SOURCES_KEY } from "@/components/admin/admin-sources";
 import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
+import { HOSPITALS_KEY } from "@/components/admin/hospital-admin";
 import { Section } from "@/components/admin/section";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -449,16 +449,16 @@ function StepOrder() {
   const t = useTranslations("admin");
   const templates = useQuery({ queryKey: [...PIPELINE_KEY, "templates"], queryFn: api.templates });
   const types = useQuery({ queryKey: [...PIPELINE_KEY, "types", false], queryFn: () => api.stepTypes(false) });
-  const sources = useQuery({ queryKey: SOURCES_KEY, queryFn: adminApi.sources });
+  const hospitals = useQuery({ queryKey: HOSPITALS_KEY, queryFn: adminApi.hospitals });
   const [scope, setScope] = useState<string>("global");
-  const sourceId = scope === "global" ? null : Number(scope);
-  const saved = (templates.data ?? []).find((x) => x.source_id === sourceId);
-  const global = (templates.data ?? []).find((x) => x.source_id === null);
-  const sortedSources = useMemo(
-    () => [...(sources.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
-    [sources.data],
+  const hospitalId = scope === "global" ? null : Number(scope);
+  const saved = (templates.data ?? []).find((x) => x.hospital_id === hospitalId);
+  const global = (templates.data ?? []).find((x) => x.hospital_id === null);
+  const sortedHospitals = useMemo(
+    () => [...(hospitals.data?.hospitals ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [hospitals.data],
   );
-  const overridden = new Set((templates.data ?? []).map((x) => x.source_id));
+  const overridden = new Set((templates.data ?? []).map((x) => x.hospital_id));
 
   return (
     <Section icon={ListOrdered} accent="slate" title={t("pipeline.orderTitle")}>
@@ -467,10 +467,10 @@ function StepOrder() {
         {t("pipeline.scope")}
         <select className="rounded border px-2 py-1.5" value={scope} onChange={(e) => setScope(e.target.value)}>
           <option value="global">{t("pipeline.global")}</option>
-          {sortedSources.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-              {overridden.has(s.id) ? ` · ${t("pipeline.ownOrder")}` : ""}
+          {sortedHospitals.map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.name}
+              {overridden.has(h.id) ? ` · ${t("pipeline.ownOrder")}` : ""}
             </option>
           ))}
         </select>
@@ -483,9 +483,9 @@ function StepOrder() {
       {templates.data && types.data && (
         <OrderEditor
           key={`${scope}-${saved?.updated_at ?? "none"}`}
-          sourceId={sourceId}
+          hospitalId={hospitalId}
           initial={saved?.step_type_ids ?? global?.step_type_ids ?? []}
-          hasOwn={sourceId !== null && saved !== undefined}
+          hasOwn={hospitalId !== null && saved !== undefined}
           types={types.data}
         />
       )}
@@ -494,12 +494,12 @@ function StepOrder() {
 }
 
 function OrderEditor({
-  sourceId,
+  hospitalId,
   initial,
   hasOwn,
   types,
 }: {
-  sourceId: number | null;
+  hospitalId: number | null;
   initial: number[];
   hasOwn: boolean;
   types: StepType[];
@@ -513,7 +513,7 @@ function OrderEditor({
 
   return (
     <div className="flex flex-col gap-2 text-sm">
-      {sourceId !== null && !hasOwn && <p className="opacity-70">{t("pipeline.usesGlobal")}</p>}
+      {hospitalId !== null && !hasOwn && <p className="opacity-70">{t("pipeline.usesGlobal")}</p>}
       <ol className="flex flex-col gap-1">
         {ids.map((id, i) => (
           <li key={id} className="flex items-center gap-2">
@@ -558,11 +558,11 @@ function OrderEditor({
         </div>
       )}
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" disabled={busy} onClick={() => act(() => api.saveTemplate(sourceId, ids), t("pipeline.orderSaved"))}>
-          {sourceId === null ? t("pipeline.saveGlobal") : t("pipeline.saveOwn")}
+        <Button size="sm" disabled={busy} onClick={() => act(() => api.saveTemplate(hospitalId, ids), t("pipeline.orderSaved"))}>
+          {hospitalId === null ? t("pipeline.saveGlobal") : t("pipeline.saveOwn")}
         </Button>
-        {sourceId !== null && hasOwn && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => act(() => api.deleteTemplate(sourceId), t("pipeline.ownRemoved"))}>
+        {hospitalId !== null && hasOwn && (
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => act(() => api.deleteTemplate(hospitalId), t("pipeline.ownRemoved"))}>
             {t("pipeline.useGlobal")}
           </Button>
         )}

@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Badge } from "@/components/admin/badge";
 import { adminErrorText } from "@/components/admin/error-text";
-import { SiteChecklist } from "@/components/admin/guide-card";
+import { HospitalChecklist } from "@/components/admin/guide-card";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import type { AdminSource } from "@/lib/api/admin";
+import type { AdminHospital } from "@/lib/api/admin";
 import {
   docgenApi,
   templateFileProblem,
@@ -46,12 +46,12 @@ export function editsOf(rows: ReviewRow[]): FieldEdit[] {
 
 export function TemplateCard({
   template,
-  sources,
+  hospitals,
   names,
   onChanged,
 }: {
   template: FormTemplate;
-  sources: AdminSource[];
+  hospitals: AdminHospital[];
   names: Map<number, string>;
   onChanged: () => Promise<void>;
 }) {
@@ -99,8 +99,8 @@ export function TemplateCard({
       <p className="text-xs opacity-80">
         {template.is_global
           ? t("templates.offeredAll")
-          : template.source_ids.length
-            ? t("templates.offeredTo", { names: template.source_ids.map((s) => names.get(s) ?? `#${s}`).join(", ") })
+          : template.hospital_ids.length
+            ? t("templates.offeredTo", { names: template.hospital_ids.map((h) => names.get(h) ?? `#${h}`).join(", ") })
             : t("templates.notOffered")}
       </p>
       {template.status === "review" && !archived && <p className="text-xs text-amber-700">{t("templates.reviewHint")}</p>}
@@ -138,12 +138,12 @@ export function TemplateCard({
         />
       )}
       {mode === "sites" && (
-        <SiteChecklist
-          sources={sources}
-          initial={template.source_ids}
+        <HospitalChecklist
+          hospitals={hospitals}
+          initial={template.hospital_ids}
           busy={flight.busy}
           onCancel={() => setMode(null)}
-          onSave={(ids) => run(() => docgenApi.setTemplateSources(template.id, ids), t("templates.sitesSaved", { n: ids.length }))}
+          onSave={(ids) => run(() => docgenApi.setTemplateHospitals(template.id, ids), t("templates.sitesSaved", { n: ids.length }))}
         />
       )}
       {mode === "rename" && (

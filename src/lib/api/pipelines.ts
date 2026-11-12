@@ -7,8 +7,8 @@ import type { UploadFile } from "@/lib/api/docgen";
 export type PipelineSummary = {
   id: number;
   project_id: number;
-  source_id: number;
-  source_name: string | null; // null: the user can no longer read the hospital
+  hospital_id: number;
+  hospital_name: string | null; // hospitals are readable by every user; null should not happen
   in_project: boolean;
   steps: number;
   closed_steps: number;
@@ -79,8 +79,8 @@ const step = (pid: number, sid: number) => `/pipelines/${pid}/steps/${sid}`;
 export const pipelineApi = {
   list: (projectId: number, includeRemoved = false) =>
     apiFetch<PipelineSummary[]>(`/projects/${projectId}/pipelines${includeRemoved ? "?include_removed=true" : ""}`),
-  start: (projectId: number, sourceId: number) =>
-    apiFetch<{ id: number }>(`/projects/${projectId}/pipelines`, json("POST", { source_id: sourceId })),
+  start: (projectId: number, hospitalId: number) =>
+    apiFetch<{ id: number }>(`/projects/${projectId}/pipelines`, json("POST", { hospital_id: hospitalId })),
   get: (id: number) => apiFetch<PipelineDetail>(`/pipelines/${id}`),
   remove: (id: number) => apiFetch<unknown>(`/pipelines/${id}`, { method: "DELETE" }),
   restore: (id: number) => apiFetch<unknown>(`/pipelines/${id}/restore`, { method: "POST" }),

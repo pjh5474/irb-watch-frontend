@@ -5,8 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "../messages/en.json";
 import { PipelineView } from "../src/components/pipelines/pipeline-view";
 import { ProjectPipelines } from "../src/components/pipelines/project-pipelines";
+import { StepPageView } from "../src/components/pipelines/step/step-page";
 import { ApiError } from "../src/lib/api/client";
-import { daysUntil, sizeLabel, todaySeoul, type PipelineDetail, type PipelineSummary } from "../src/lib/api/pipelines";
+import {
+  daysUntil,
+  sizeLabel,
+  todaySeoul,
+  type PipelineDetail,
+  type PipelineStep,
+  type PipelineSummary,
+  type StepPage,
+} from "../src/lib/api/pipelines";
 
 const SUMMARY: PipelineSummary = {
   id: 9,
@@ -21,61 +30,76 @@ const SUMMARY: PipelineSummary = {
   deleted_at: null,
 };
 
+const STATUSES = [
+  { key: "not_started", label: "Not started", closed: false, archived: false },
+  { key: "submitted", label: "Submitted", closed: false, archived: false },
+  { key: "approved", label: "Approved", closed: true, archived: false },
+  { key: "old", label: "Old", closed: false, archived: true },
+];
+
+const INITIAL: PipelineStep = {
+  id: 21,
+  step_type_id: 1,
+  step_type_name: "Initial review",
+  name: "Initial review",
+  position: 1,
+  status_key: "not_started",
+  due_on: "2020-01-01",
+  submitted_on: null,
+  decided_on: null,
+  note: "",
+  deleted_at: null,
+};
+
+const MEETING: PipelineStep = {
+  id: 22,
+  step_type_id: null,
+  step_type_name: null,
+  name: "Meeting",
+  position: 2,
+  status_key: "approved",
+  due_on: "2020-01-01",
+  submitted_on: null,
+  decided_on: "2026-11-11",
+  note: "",
+  deleted_at: null,
+};
+
 const DETAIL: PipelineDetail = {
   pipeline: SUMMARY,
-  statuses: [
-    { key: "not_started", label: "Not started", closed: false, archived: false },
-    { key: "submitted", label: "Submitted", closed: false, archived: false },
-    { key: "approved", label: "Approved", closed: true, archived: false },
-    { key: "old", label: "Old", closed: false, archived: true },
-  ],
+  statuses: STATUSES,
   step_types: [{ id: 2, name: "Amendment", description: "" }],
   steps: [
+    { ...INITIAL, documents: 1, required: 2, required_missing: 1, drafts: 1, open_jobs: 0 },
+    { ...MEETING, documents: 0, required: 0, required_missing: 0, drafts: 0, open_jobs: 1 },
+    { ...MEETING, id: 23, name: "Old step", deleted_at: "2026-11-12T00:00:00Z", documents: 0, required: 0, required_missing: 0, drafts: 0, open_jobs: 0 },
+  ],
+};
+
+const PAGE: StepPage = {
+  pipeline: SUMMARY,
+  step: INITIAL,
+  statuses: STATUSES,
+  checklist: [
+    { name: "Protocol", uploaded: true },
+    { name: "Consent", uploaded: false },
+  ],
+  documents: [
     {
-      id: 21,
-      step_type_id: 1,
-      step_type_name: "Initial review",
-      name: "Initial review",
-      position: 1,
-      status_key: "not_started",
-      due_on: null,
-      submitted_on: null,
-      decided_on: null,
-      note: "",
+      id: 31,
+      name: "Protocol",
+      created_at: "2026-11-11T00:00:00Z",
       deleted_at: null,
-      checklist: [
-        { name: "Protocol", uploaded: true },
-        { name: "Consent", uploaded: false },
+      versions: [
+        { version_no: 2, filename: "p2.docx", size_bytes: 12_000, has_text: true, text_note: null, created_at: "2026-11-12T00:00:00Z" },
+        { version_no: 1, filename: "p1.docx", size_bytes: 11_000, has_text: true, text_note: null, created_at: "2026-11-11T00:00:00Z" },
       ],
-      documents: [
-        {
-          id: 31,
-          name: "Protocol",
-          created_at: "2026-11-11T00:00:00Z",
-          deleted_at: null,
-          versions: [
-            { version_no: 2, filename: "p2.docx", size_bytes: 12_000, has_text: true, text_note: null, created_at: "2026-11-12T00:00:00Z" },
-            { version_no: 1, filename: "p1.docx", size_bytes: 11_000, has_text: true, text_note: null, created_at: "2026-11-11T00:00:00Z" },
-          ],
-        },
-      ],
-    },
-    {
-      id: 22,
-      step_type_id: null,
-      step_type_name: null,
-      name: "Meeting",
-      position: 2,
-      status_key: "approved",
-      due_on: "2020-01-01",
-      submitted_on: null,
-      decided_on: "2026-11-11",
-      note: "",
-      deleted_at: null,
-      checklist: [],
-      documents: [],
     },
   ],
+  drafts: [],
+  jobs: [],
+  previous_step_id: null,
+  next_step_id: 22,
 };
 
 const state = vi.hoisted(() => ({
@@ -87,6 +111,7 @@ const state = vi.hoisted(() => ({
   jobs: [] as unknown[],
   boards: [] as unknown[],
   inputs: null as unknown,
+  page: {} as Record<string, unknown>, // overrides of the step page
 }));
 
 const JOB = (status: string, extra: object = {}) => ({
@@ -135,7 +160,6 @@ vi.mock("@/lib/api/docgen", async () => {
     ...actual,
     toUpload: async (file: File) => ({ filename: file.name, content_base64: "eA==" }),
     docgenApi: {
-      pipelineDrafts: async () => state.drafts,
       jobs: async () => state.jobs,
       startStepDraft: async (stepId: number, body: unknown) => {
         if (state.startError) throw state.startError;
@@ -169,9 +193,13 @@ vi.mock("@/lib/api/pipelines", async () => {
         return { id: 77 };
       },
       get: async () => DETAIL,
-      history: async () => [
-        { id: 1, step_id: 21, mine: true, event_type: "document.uploaded", payload: { name: "Protocol" }, created_at: "2026-11-11T01:02:00Z" },
-      ],
+      getStep: async () => ({ ...PAGE, drafts: state.drafts, jobs: state.jobs, ...state.page }),
+      history: async (id: number, stepId?: number) => {
+        state.calls.push(["history", id, stepId]);
+        return [
+          { id: 1, step_id: 21, mine: true, event_type: "document.uploaded", payload: { name: "Protocol" }, created_at: "2026-11-11T01:02:00Z" },
+        ];
+      },
       restore: call("restore"),
       remove: call("remove"),
       addStep: call("addStep"),
@@ -210,6 +238,7 @@ beforeEach(() => {
   state.jobs = [];
   state.boards = [];
   state.inputs = INPUTS;
+  state.page = {};
 });
 
 afterEach(cleanup);
@@ -251,42 +280,101 @@ describe("ProjectPipelines", () => {
   });
 });
 
-describe("PipelineView", () => {
-  it("shows steps, checklist, versions, overdue only for open steps, and archived statuses hidden", async () => {
+describe("PipelineView (overview)", () => {
+  const overview = async () => {
     wrap(<PipelineView id={9} />);
     await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
+  };
+  const row = (name: string) => within(screen.getByRole("link", { name }).closest("li") as HTMLElement);
+
+  it("lists each step with a link to its page, its status and counts, and no uploads or drafts", async () => {
+    await overview();
+    expect(screen.getByRole("link", { name: "Initial review" }).getAttribute("href")).toBe("/pipelines/9/steps/21");
+    const initial = row("Initial review");
+    expect(initial.getByText("Not started")).toBeTruthy();
+    expect(initial.getByText("1 document")).toBeTruthy();
+    expect(initial.getByText("1 of 2 required")).toBeTruthy();
+    expect(initial.getByText("1 AI draft")).toBeTruthy();
+    expect(initial.getByText(/overdue/)).toBeTruthy(); // open step past its due date
+    const meeting = row("Meeting");
+    expect(meeting.queryByText(/overdue/)).toBeNull(); // closed steps are never overdue
+    expect(meeting.getByText("no documents")).toBeTruthy();
+    expect(meeting.getByText("AI draft being written")).toBeTruthy();
+    expect(meeting.getByText("Decided 2026-11-11")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Upload" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Draft for this step" })).toBeNull();
+    expect(screen.queryByLabelText("Status")).toBeNull();
+  });
+
+  it("reorders steps", async () => {
+    await overview();
+    fireEvent.click(screen.getByRole("button", { name: "Move Meeting up" }));
+    await vi.waitFor(() => expect(state.calls).toEqual([["reorder", 9, [22, 21]]]));
+  });
+
+  it("adds a typed step", async () => {
+    await overview();
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByText("Choose a step type or enter a name.")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Step type"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await screen.findByText("Step added.");
+    expect(state.calls).toEqual([["addStep", 9, { step_type_id: 2, name: null }]]);
+  });
+
+  it("links removed steps to their page and restores them", async () => {
+    await overview();
+    fireEvent.click(screen.getByLabelText("Show removed steps (1)"));
+    expect(screen.getByRole("link", { name: "Old step" }).getAttribute("href")).toBe("/pipelines/9/steps/23");
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    await vi.waitFor(() => expect(state.calls).toEqual([["restoreStep", 9, 23]]));
+  });
+
+  it("opens the whole pipeline's history", async () => {
+    await overview();
+    fireEvent.click(screen.getByRole("button", { name: "Show history" }));
+    await screen.findByText("Document uploaded");
+    expect(state.calls).toEqual([["history", 9, undefined]]);
+  });
+});
+
+describe("StepPageView", () => {
+  const stepPage = async () => {
+    wrap(<StepPageView id={9} stepId={21} />);
+    await screen.findByRole("heading", { name: "Initial review" });
+  };
+
+  it("shows the breadcrumb, the neighbours, the checklist and every version", async () => {
+    await stepPage();
+    const nav = within(screen.getByRole("navigation", { name: "Where you are" }));
+    expect(nav.getByRole("link", { name: "IRB pipeline: SNUH" }).getAttribute("href")).toBe("/pipelines/9");
+    expect(nav.getByRole("link", { name: "Next step →" }).getAttribute("href")).toBe("/pipelines/9/steps/22");
+    expect(nav.queryByRole("link", { name: /Previous step/ })).toBeNull();
     expect(screen.getByText("✓ Protocol", { exact: false })).toBeTruthy();
     expect(screen.getByText("version 2 · p2.docx · 12 KB")).toBeTruthy();
-    expect(screen.queryByText(/overdue/)).toBeNull(); // the overdue step is approved (closed)
-    const status = screen.getAllByLabelText("Status")[0] as HTMLSelectElement;
+    const status = screen.getByLabelText("Status") as HTMLSelectElement;
     expect([...status.options].map((o) => o.textContent)).toEqual(["Not started", "Submitted", "Approved"]);
     fireEvent.click(screen.getByRole("button", { name: "2 versions" }));
     expect(screen.getByRole("button", { name: "Download Protocol version 1" })).toBeTruthy();
   });
 
-  it("changes status, dates and order", async () => {
-    wrap(<PipelineView id={9} />);
-    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
+  it("changes status and dates", async () => {
+    await stepPage();
     // One change at a time: the controls are disabled while a change is saved.
-    fireEvent.change(screen.getAllByLabelText("Status")[0], { target: { value: "submitted" } });
-    await vi.waitFor(() => expect((screen.getAllByLabelText("Due date")[0] as HTMLInputElement).disabled).toBe(false));
-    fireEvent.change(screen.getAllByLabelText("Due date")[0], { target: { value: "2026-12-31" } });
-    await vi.waitFor(() => expect(state.calls.length).toBe(2));
-    fireEvent.click(screen.getByRole("button", { name: "Move Meeting up" }));
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "submitted" } });
+    await vi.waitFor(() => expect((screen.getByLabelText("Due date") as HTMLInputElement).disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText("Due date"), { target: { value: "2026-12-31" } });
     await vi.waitFor(() =>
       expect(state.calls).toEqual([
         ["updateStep", 9, 21, { status_key: "submitted" }],
         ["updateStep", 9, 21, { due_on: "2026-12-31" }],
-        ["reorder", 9, [22, 21]],
       ]),
     );
   });
 
   it("uploads to a checklist name or a typed one, and checks the file first", async () => {
-    wrap(<PipelineView id={9} />);
-    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
-    const step = screen.getAllByRole("listitem").find((li) => li.textContent?.includes("Required documents")) as HTMLElement;
-    const form = within(step);
+    await stepPage();
+    const form = within(screen.getByRole("form", { name: "Upload a document" }));
     fireEvent.click(form.getByRole("button", { name: "Upload" }));
     expect((await form.findByRole("alert")).textContent).toBe("Choose a file.");
     const names = form.getByLabelText("Document name") as HTMLSelectElement;
@@ -298,50 +386,76 @@ describe("PipelineView", () => {
     expect(state.calls).toEqual([["upload", 9, 21, "Consent", "icf.pdf"]]);
   });
 
-  it("adds a typed step and asks before removing a step", async () => {
-    wrap(<PipelineView id={9} />);
-    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect((await screen.findByText("Choose a step type or enter a name."))).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Step type"), { target: { value: "2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    await screen.findByText("Step added.");
-    const meeting = screen.getAllByRole("listitem").find((li) => li.querySelector("input")?.value === "Meeting") as HTMLElement;
-    fireEvent.click(within(meeting).getByRole("button", { name: "Remove step" }));
-    expect(state.calls).toEqual([["addStep", 9, { step_type_id: 2, name: null }]]);
-    fireEvent.click(within(meeting).getByRole("button", { name: "Remove" }));
-    await vi.waitFor(() => expect(state.calls).toContainEqual(["removeStep", 9, 22]));
+  it("asks before removing the step", async () => {
+    await stepPage();
+    fireEvent.click(screen.getByRole("button", { name: "Remove step" }));
+    expect(state.calls).toEqual([]);
+    const confirm = within(screen.getByText(/Remove this step\?/).closest("section") as HTMLElement);
+    fireEvent.click(confirm.getByRole("button", { name: "Remove" }));
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["removeStep", 9, 21]));
   });
 
-  it("opens the history", async () => {
-    wrap(<PipelineView id={9} />);
-    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
-    fireEvent.click(screen.getByRole("button", { name: "Show history" }));
+  it("shows a removed step read-only with Restore", async () => {
+    state.page = { step: { ...INITIAL, deleted_at: "2026-11-12T00:00:00Z" }, previous_step_id: null, next_step_id: null };
+    await stepPage();
+    expect(screen.getByText(/This step is removed/)).toBeTruthy();
+    expect((screen.getByLabelText("Status") as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.queryByRole("form", { name: "Upload a document" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Draft for this step" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove step" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Download the latest Protocol" })).toBeTruthy(); // files stay downloadable
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    await vi.waitFor(() => expect(state.calls).toEqual([["restoreStep", 9, 21]]));
+  });
+
+  it("sends a step of a removed pipeline to the overview, with no Restore here", async () => {
+    state.page = { pipeline: { ...SUMMARY, deleted_at: "2026-11-12T00:00:00Z" } };
+    await stepPage();
+    expect(screen.getByText(/This pipeline is removed/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Back to the pipeline" }).getAttribute("href")).toBe("/pipelines/9");
+    expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
+    expect((screen.getByLabelText("Due date") as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("shows the server's reason when the step cannot be opened", async () => {
+    state.page = {};
+    const { pipelineApi } = await import("../src/lib/api/pipelines");
+    const spy = vi.spyOn(pipelineApi, "getStep").mockRejectedValueOnce(new ApiError(404, "step not found"));
+    wrap(<StepPageView id={9} stepId={99} />);
+    expect((await screen.findByRole("alert")).textContent).toBe("step not found");
+    spy.mockRestore();
+  });
+
+  it("opens this step's history only", async () => {
+    await stepPage();
+    fireEvent.click(screen.getByRole("button", { name: "Show this step's history" }));
     await screen.findByText("Document uploaded");
+    expect(state.calls).toEqual([["history", 9, 21]]);
   });
 });
 
 describe("AI drafts of a step", () => {
-  const firstStep = async () => {
-    wrap(<PipelineView id={9} />);
-    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
-    return within(screen.getAllByRole("listitem").find((li) => li.querySelector("input")?.value === "Initial review") as HTMLElement);
+  const draftsOf = async () => {
+    wrap(<StepPageView id={9} stepId={21} />);
+    await screen.findByRole("heading", { name: "Initial review" });
+    return within(screen.getByRole("heading", { name: "AI drafts" }).closest("section") as HTMLElement);
   };
 
   it("lists the step's drafts and a failed job with its reason", async () => {
-    state.drafts = [
-      { id: "d-1", title: "Initial submission", pipeline_step_id: 21, updated_at: "2026-11-12T02:00:00Z", documents: [] },
-      { id: "d-2", title: "Other step", pipeline_step_id: 22, updated_at: "2026-11-12T02:00:00Z", documents: [] },
-    ];
+    state.drafts = [{ id: "d-1", title: "Initial submission", pipeline_step_id: 21, updated_at: "2026-11-12T02:00:00Z", documents: [] }];
     state.jobs = [JOB("failed", { error: "the AI could not write the draft (TimeoutError); please try again", finished_at: "2026-11-12T01:05:00Z" })];
-    const step = await firstStep();
+    const step = await draftsOf();
     expect((await step.findByRole("link", { name: "Initial submission" })).getAttribute("href")).toBe("/drafts/d-1");
-    expect(step.queryByRole("link", { name: "Other step" })).toBeNull();
     expect((await step.findByRole("alert")).textContent).toContain("TimeoutError");
   });
 
+  it("says so when the step has no drafts", async () => {
+    const step = await draftsOf();
+    expect(step.getByText("No AI drafts in this step yet.")).toBeTruthy();
+  });
+
   it("names every own file that will be sent, and starts a job with the ticked ones", async () => {
-    const step = await firstStep();
+    const step = await draftsOf();
     fireEvent.click(await step.findByRole("button", { name: "Draft for this step" }));
     const dialog = within(await step.findByRole("form", { name: "Draft for this step" }));
     const scan = dialog.getByRole("checkbox", { name: /Scan/ }) as HTMLInputElement;
@@ -368,13 +482,13 @@ describe("AI drafts of a step", () => {
         },
       ],
     ]);
-    // The step now shows the open job, and a second draft cannot be started meanwhile.
+    // The step page is loaded again: it shows the open job, and a second draft cannot start meanwhile.
     await step.findByText(/A draft is waiting to be written/);
     expect((step.getByRole("button", { name: "Draft for this step" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("cannot start with nothing chosen, and shows the server's refusal", async () => {
-    const step = await firstStep();
+    const step = await draftsOf();
     fireEvent.click(await step.findByRole("button", { name: "Draft for this step" }));
     const dialog = within(await step.findByRole("form", { name: "Draft for this step" }));
     fireEvent.click(dialog.getByRole("checkbox", { name: /Protocol/ }));
@@ -391,7 +505,7 @@ describe("AI drafts of a step", () => {
   it("offers the hospital's board documents only when the step type allows them", async () => {
     state.inputs = { ...INPUTS, allow_board_documents: true, form_template_id: null, has_instructions: false };
     state.boards = [{ id: 86, name: "Kimpo : forms", requires_login: true, ai_enabled: false }];
-    const step = await firstStep();
+    const step = await draftsOf();
     fireEvent.click(await step.findByRole("button", { name: "Draft for this step" }));
     const dialog = within(await step.findByRole("form", { name: "Draft for this step" }));
     expect(dialog.getByText("Hospital board documents (optional)")).toBeTruthy();

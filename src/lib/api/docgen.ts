@@ -153,7 +153,12 @@ export type DraftVersion = {
   fields?: Answers | null; // template drafts: one answer per field key
 };
 
-export type DraftDetail = { draft: Draft; versions: DraftVersion[]; guides: Guide[] };
+export type DraftDetail = {
+  draft: Draft;
+  versions: DraftVersion[];
+  guides: Guide[];
+  pipeline_id?: number | null; // the pipeline of the draft's step ("Back to step"); null: standalone
+};
 
 export type UploadFile = { filename: string; content_base64: string };
 

@@ -1,74 +1,21 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Check, Download } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowDown, ArrowUp, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { StepDrafts } from "@/components/pipelines/step-drafts";
+import { History, Note, detailKey, errorText, useChange } from "@/components/pipelines/shared";
+import { DueBadge } from "@/components/pipelines/step/step-header";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
-import { ApiError } from "@/lib/api/client";
-import { toUpload } from "@/lib/api/docgen";
-import {
-  MAX_PIPELINE_FILE,
-  type PipelineDetail,
-  type PipelineStatus,
-  type PipelineStep,
-  type StepChange,
-  daysUntil,
-  pipelineApi,
-  sizeLabel,
-  todaySeoul,
-} from "@/lib/api/pipelines";
-import { useSingleFlight } from "@/lib/use-single-flight";
+import { type OverviewStep, type PipelineDetail, type PipelineStatus, daysUntil, pipelineApi, todaySeoul } from "@/lib/api/pipelines";
 
-type Message = { kind: "ok" | "error"; text: string } | null;
-type T = ReturnType<typeof useTranslations>;
-
-export const detailKey = (id: number) => ["pipelines", "detail", id] as const;
-
-function errorText(e: unknown, t: T): string {
-  if (e instanceof ApiError) return e.status === 0 ? t("unreachable") : e.message || t("failed");
-  return t("failed");
-}
-
-function Note({ message }: { message: Message }) {
-  if (!message) return null;
-  return (
-    <p
-      role={message.kind === "error" ? "alert" : "status"}
-      className={`text-sm ${message.kind === "error" ? "text-red-600" : "text-green-700 dark:text-green-400"}`}
-    >
-      {message.text}
-    </p>
-  );
-}
-
-/** One change at a time with its own message; refreshes the pipeline after a success. */
-function useChange() {
-  const t = useTranslations("pipelines");
-  const queryClient = useQueryClient();
-  const flight = useSingleFlight();
-  const [message, setMessage] = useState<Message>(null);
-  async function run(work: () => Promise<unknown>, ok: string | null): Promise<boolean> {
-    setMessage(null);
-    const done = await flight.run(async () => {
-      try {
-        await work();
-        if (ok) setMessage({ kind: "ok", text: ok });
-        await queryClient.invalidateQueries({ queryKey: ["pipelines"] });
-        return true;
-      } catch (e) {
-        setMessage({ kind: "error", text: errorText(e, t) });
-        return false;
-      }
-    });
-    return done ?? false;
-  }
-  return { run, busy: flight.busy, message, setMessage };
-}
-
+/**
+ * The pipeline overview (phase A): one row per step with its status, dates and counts; each
+ * row opens the step's own page, where documents and drafts are. Also: add, reorder, removed
+ * steps, the whole history and removing the pipeline.
+ */
 export function PipelineView({ id }: { id: number }) {
   const t = useTranslations("pipelines");
   const detail = useQuery({ queryKey: detailKey(id), queryFn: () => pipelineApi.get(id) });
@@ -110,9 +57,10 @@ export function PipelineView({ id }: { id: number }) {
         <Note message={change.message} />
       </header>
 
-      <ol className="flex flex-col gap-4">
+      {live.length === 0 && <p className="text-sm opacity-70">{t("noSteps")}</p>}
+      <ol className="flex flex-col gap-2">
         {live.map((step, i) => (
-          <StepCard key={step.id} pipelineId={id} step={step} statuses={d.statuses} index={i} order={live.map((s) => s.id)} readOnly={removed} />
+          <StepRow key={step.id} pipelineId={id} step={step} statuses={d.statuses} index={i} order={live.map((s) => s.id)} readOnly={removed} />
         ))}
       </ol>
 
@@ -128,7 +76,9 @@ export function PipelineView({ id }: { id: number }) {
             <ul className="flex flex-col gap-1">
               {gone.map((s) => (
                 <li key={s.id} className="flex items-center gap-2">
-                  <span className="flex-1 opacity-70">{s.name}</span>
+                  <Link href={`/pipelines/${id}/steps/${s.id}`} className="flex-1 opacity-70 underline-offset-4 hover:underline">
+                    {s.name}
+                  </Link>
                   {!removed && (
                     <Button size="sm" variant="outline" disabled={change.busy} onClick={() => change.run(() => pipelineApi.restoreStep(id, s.id), t("restored"))}>
                       {t("restore")}
@@ -141,7 +91,7 @@ export function PipelineView({ id }: { id: number }) {
         </section>
       )}
 
-      <History id={id} detail={d} />
+      <History id={id} stepNames={new Map(d.steps.map((s) => [s.id, s.name]))} />
 
       {!removed && <RemovePipeline id={id} />}
     </main>
@@ -174,7 +124,8 @@ function RemovePipeline({ id }: { id: number }) {
   );
 }
 
-function StepCard({
+/** One step: number, name (opens the step page), status, dates and counts; move up or down. */
+function StepRow({
   pipelineId,
   step,
   statuses,
@@ -183,7 +134,7 @@ function StepCard({
   readOnly,
 }: {
   pipelineId: number;
-  step: PipelineStep;
+  step: OverviewStep;
   statuses: PipelineStatus[];
   index: number;
   order: number[];
@@ -191,52 +142,29 @@ function StepCard({
 }) {
   const t = useTranslations("pipelines");
   const change = useChange();
-  const [note, setNote] = useState(step.note);
-  const [name, setName] = useState(step.name);
-  const [confirming, setConfirming] = useState(false);
   const status = statuses.find((s) => s.key === step.status_key);
-  const choices = statuses.filter((s) => !s.archived || s.key === step.status_key);
-  const today = todaySeoul();
-  const due = step.due_on && !status?.closed ? daysUntil(step.due_on, today) : null;
-  const update = (c: StepChange) => change.run(() => pipelineApi.updateStep(pipelineId, step.id, c), null);
+  const due = step.due_on && !status?.closed ? daysUntil(step.due_on, todaySeoul()) : null;
   const move = (by: -1 | 1) => {
     const ids = [...order];
     const to = index + by;
     [ids[index], ids[to]] = [ids[to], ids[index]];
     return change.run(() => pipelineApi.reorder(pipelineId, ids), null);
   };
-  const id = (part: string) => `step-${step.id}-${part}`;
+  const dates = (["submitted_on", "decided_on"] as const).filter((k) => step[k]);
 
   return (
-    <li className="flex flex-col gap-3 rounded border p-4">
+    <li className="flex flex-col gap-1 rounded border p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
         <span className="tabular-nums opacity-60">{index + 1}.</span>
-        {readOnly ? (
-          <h2 className="font-medium">{step.name}</h2>
-        ) : (
-          <>
-            <label className="sr-only" htmlFor={id("name")}>
-              {t("stepName")}
-            </label>
-            <input
-              id={id("name")}
-              className="min-w-40 flex-1 rounded border px-2 py-1 font-medium"
-              value={name}
-              maxLength={100}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => name.trim() && name.trim() !== step.name && update({ name: name.trim() })}
-            />
-          </>
-        )}
+        <Link href={`/pipelines/${pipelineId}/steps/${step.id}`} className="font-medium underline-offset-4 hover:underline">
+          {step.name}
+        </Link>
         {step.step_type_name && step.step_type_name !== step.name && (
           <span className="text-xs opacity-60">{step.step_type_name}</span>
         )}
+        <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs dark:bg-neutral-800">{status?.label ?? step.status_key}</span>
         {status?.closed && <Check className="size-4 text-green-700" aria-label={t("finished")} />}
-        {due !== null && (
-          <span className={`rounded px-2 py-0.5 text-xs ${due < 0 ? "bg-red-100 text-red-800" : due <= 14 ? "bg-amber-100 text-amber-800" : "bg-neutral-100"}`}>
-            {due < 0 ? t("overdue", { n: -due }) : t("dueIn", { n: due })}
-          </span>
-        )}
+        <DueBadge due={due} />
         {!readOnly && (
           <span className="ml-auto flex gap-1">
             <Button size="sm" variant="outline" disabled={change.busy || index === 0} onClick={() => move(-1)} aria-label={t("up", { name: step.name })}>
@@ -248,246 +176,29 @@ function StepCard({
           </span>
         )}
       </div>
-
-      <div className="grid gap-2 text-sm sm:grid-cols-4">
-        <label className="flex flex-col gap-1">
-          {t("status")}
-          <select
-            className="rounded border px-2 py-1"
-            disabled={readOnly || change.busy}
-            value={step.status_key}
-            onChange={(e) => update({ status_key: e.target.value })}
-          >
-            {choices.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {(["due_on", "submitted_on", "decided_on"] as const).map((key) => (
-          <label key={key} className="flex flex-col gap-1">
-            {t(key)}
-            <input
-              type="date"
-              className="rounded border px-2 py-1"
-              disabled={readOnly || change.busy}
-              value={step[key] ?? ""}
-              onChange={(e) => update({ [key]: e.target.value || null })}
-            />
-          </label>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs opacity-80">
+        {step.due_on && <span>{t("due_on")} {step.due_on}</span>}
+        {dates.map((k) => (
+          <span key={k}>
+            {t(k)} {step[k]}
+          </span>
         ))}
+        <span>{t("docCount", { n: step.documents })}</span>
+        {step.required > 0 && (
+          <span className={step.required_missing > 0 ? "text-amber-700 dark:text-amber-300" : ""}>
+            {t("requiredCount", { done: step.required - step.required_missing, total: step.required })}
+          </span>
+        )}
+        {step.drafts > 0 && <span>{t("draftCount", { n: step.drafts })}</span>}
+        {step.open_jobs > 0 && (
+          <span className="flex items-center gap-1" role="status">
+            <Spinner aria-hidden />
+            {t("writing")}
+          </span>
+        )}
       </div>
-
-      <div className="flex flex-col gap-1 text-sm">
-        <label htmlFor={id("note")}>{t("note")}</label>
-        <textarea
-          id={id("note")}
-          className="rounded border px-2 py-1"
-          rows={2}
-          maxLength={4000}
-          disabled={readOnly}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          onBlur={() => note !== step.note && update({ note })}
-        />
-      </div>
-
-      {step.checklist.length > 0 && (
-        <div className="flex flex-col gap-1 text-sm">
-          <h3 className="font-medium">{t("checklist")}</h3>
-          <ul className="flex flex-wrap gap-2">
-            {step.checklist.map((c) => (
-              <li
-                key={c.name}
-                className={`rounded px-2 py-0.5 text-xs ${c.uploaded ? "bg-green-100 text-green-900" : "bg-neutral-100 text-neutral-700"}`}
-              >
-                {c.uploaded ? "✓ " : "○ "}
-                {c.name}
-                <span className="sr-only">{c.uploaded ? t("uploaded") : t("missing")}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <Documents pipelineId={pipelineId} step={step} readOnly={readOnly} />
-      {!readOnly && <Upload pipelineId={pipelineId} step={step} />}
-
-      <StepDrafts pipelineId={pipelineId} step={step} readOnly={readOnly} />
-
-      {!readOnly && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          {confirming ? (
-            <>
-              <span>{t("confirmRemoveStep")}</span>
-              <Button size="sm" variant="destructive" disabled={change.busy} onClick={() => change.run(() => pipelineApi.removeStep(pipelineId, step.id), null)}>
-                {t("remove")}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
-                {t("cancel")}
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" variant="ghost" onClick={() => setConfirming(true)}>
-              {t("removeStep")}
-            </Button>
-          )}
-        </div>
-      )}
       <Note message={change.message} />
     </li>
-  );
-}
-
-function Documents({ pipelineId, step, readOnly }: { pipelineId: number; step: PipelineStep; readOnly: boolean }) {
-  const t = useTranslations("pipelines");
-  const change = useChange();
-  const [open, setOpen] = useState<number | null>(null);
-  const live = step.documents.filter((d) => d.deleted_at === null);
-  const gone = step.documents.filter((d) => d.deleted_at !== null);
-
-  async function download(documentId: number, versionNo: number) {
-    await change.run(async () => {
-      const { url } = await pipelineApi.downloadUrl(pipelineId, step.id, documentId, versionNo);
-      window.location.assign(url);
-    }, null);
-  }
-
-  if (step.documents.length === 0) return <p className="text-sm opacity-70">{t("noDocuments")}</p>;
-  return (
-    <div className="flex flex-col gap-2 text-sm">
-      <h3 className="font-medium">{t("documents")}</h3>
-      <ul className="flex flex-col gap-2">
-        {live.map((doc) => {
-          const latest = doc.versions[0];
-          return (
-            <li key={doc.id} className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{doc.name}</span>
-                {latest && (
-                  <span className="opacity-70">
-                    {t("versionLine", { n: latest.version_no, file: latest.filename, size: sizeLabel(latest.size_bytes) })}
-                  </span>
-                )}
-                {latest && !latest.has_text && <span className="text-xs opacity-60">{t("noText")}</span>}
-                <span className="ml-auto flex gap-1">
-                  {latest && (
-                    <Button size="sm" variant="outline" disabled={change.busy} onClick={() => download(doc.id, latest.version_no)} aria-label={t("downloadLatest", { name: doc.name })}>
-                      <Download className="size-4" aria-hidden />
-                    </Button>
-                  )}
-                  {doc.versions.length > 1 && (
-                    <Button size="sm" variant="ghost" onClick={() => setOpen(open === doc.id ? null : doc.id)} aria-expanded={open === doc.id}>
-                      {t("versions", { n: doc.versions.length })}
-                    </Button>
-                  )}
-                  {!readOnly && (
-                    <Button size="sm" variant="ghost" disabled={change.busy} onClick={() => change.run(() => pipelineApi.setDocumentRemoved(pipelineId, step.id, doc.id, true), t("documentRemoved"))}>
-                      {t("remove")}
-                    </Button>
-                  )}
-                </span>
-              </div>
-              {open === doc.id && (
-                <ul className="ml-4 flex flex-col gap-1">
-                  {doc.versions.map((v) => (
-                    <li key={v.version_no} className="flex items-center gap-2">
-                      <span className="flex-1 opacity-80">
-                        {t("versionLine", { n: v.version_no, file: v.filename, size: sizeLabel(v.size_bytes) })} · {v.created_at.slice(0, 10)}
-                      </span>
-                      <Button size="sm" variant="outline" disabled={change.busy} onClick={() => download(doc.id, v.version_no)} aria-label={t("downloadVersion", { name: doc.name, n: v.version_no })}>
-                        <Download className="size-4" aria-hidden />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {gone.length > 0 && !readOnly && (
-        <ul className="flex flex-col gap-1 text-xs opacity-80">
-          {gone.map((doc) => (
-            <li key={doc.id} className="flex items-center gap-2">
-              <span className="flex-1">{t("removedDocument", { name: doc.name })}</span>
-              <Button size="sm" variant="ghost" disabled={change.busy} onClick={() => change.run(() => pipelineApi.setDocumentRemoved(pipelineId, step.id, doc.id, false), t("restored"))}>
-                {t("restore")}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <Note message={change.message} />
-    </div>
-  );
-}
-
-const TYPED = "__typed__";
-
-function Upload({ pipelineId, step }: { pipelineId: number; step: PipelineStep }) {
-  const t = useTranslations("pipelines");
-  const change = useChange();
-  const names = [
-    ...step.checklist.map((c) => c.name),
-    ...step.documents.filter((d) => d.deleted_at === null && !step.checklist.some((c) => c.name.toLowerCase() === d.name.toLowerCase())).map((d) => d.name),
-  ];
-  const [choice, setChoice] = useState(names[0] ?? TYPED);
-  const [typed, setTyped] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [box, setBox] = useState(0);
-  const id = `upload-${step.id}`;
-
-  async function send(event: React.FormEvent) {
-    event.preventDefault();
-    const name = (choice === TYPED ? typed : choice).trim();
-    if (!name) return change.setMessage({ kind: "error", text: t("needDocName") });
-    if (!file) return change.setMessage({ kind: "error", text: t("needFile") });
-    if (file.size === 0) return change.setMessage({ kind: "error", text: t("fileEmpty") });
-    if (file.size > MAX_PIPELINE_FILE) return change.setMessage({ kind: "error", text: t("fileTooBig", { mb: MAX_PIPELINE_FILE / 1_000_000 }) });
-    const ok = await change.run(async () => {
-      const result = await pipelineApi.upload(pipelineId, step.id, name, await toUpload(file));
-      change.setMessage({ kind: "ok", text: t("uploadedVersion", { name: result.document.name, n: result.version_no }) });
-    }, null);
-    if (ok) {
-      setFile(null);
-      setTyped("");
-      setBox((n) => n + 1);
-    }
-  }
-
-  return (
-    <form onSubmit={send} className="flex flex-wrap items-end gap-2 rounded bg-neutral-50 p-2 text-sm dark:bg-neutral-900">
-      <label className="flex flex-col gap-1">
-        {t("docName")}
-        <select id={`${id}-name`} className="rounded border px-2 py-1" value={choice} onChange={(e) => setChoice(e.target.value)}>
-          {names.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-          <option value={TYPED}>{t("otherName")}</option>
-        </select>
-      </label>
-      {choice === TYPED && (
-        <label className="flex flex-col gap-1">
-          {t("typedName")}
-          <input className="rounded border px-2 py-1" value={typed} maxLength={200} onChange={(e) => setTyped(e.target.value)} />
-        </label>
-      )}
-      <label className="flex flex-col gap-1">
-        {t("file")}
-        <input key={box} type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      </label>
-      <Button type="submit" size="sm" disabled={change.busy} aria-busy={change.busy}>
-        {change.busy && <Spinner aria-hidden />}
-        {t("upload")}
-      </Button>
-      <div className="basis-full">
-        <Note message={change.message} />
-      </div>
-    </form>
   );
 }
 
@@ -536,46 +247,4 @@ function AddStep({ pipelineId, types }: { pipelineId: number; types: PipelineDet
       <Note message={change.message} />
     </section>
   );
-}
-
-function History({ id, detail }: { id: number; detail: PipelineDetail }) {
-  const t = useTranslations("pipelines");
-  const [open, setOpen] = useState(false);
-  const events = useQuery({ queryKey: ["pipelines", "history", id], queryFn: () => pipelineApi.history(id), enabled: open });
-  const stepName = new Map(detail.steps.map((s) => [s.id, s.name]));
-  return (
-    <section className="flex flex-col gap-2 rounded border p-4 text-sm">
-      <div>
-        <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          {open ? t("hideHistory") : t("history")}
-        </Button>
-      </div>
-      {open && events.isLoading && <p className="opacity-70">{t("loading")}</p>}
-      {events.isError && (
-        <p role="alert" className="text-red-600">
-          {errorText(events.error, t)}
-        </p>
-      )}
-      {open && (
-      <ol className="flex flex-col gap-1">
-        {(events.data ?? []).map((e) => (
-          <li key={e.id} className="flex flex-wrap gap-2">
-            <time className="tabular-nums opacity-60" dateTime={e.created_at}>
-              {e.created_at.slice(0, 16).replace("T", " ")}
-            </time>
-            <span>{t.has(`event.${eventKey(e.event_type)}`) ? t(`event.${eventKey(e.event_type)}`) : e.event_type}</span>
-            {e.step_id !== null && stepName.has(e.step_id) && <span className="opacity-70">· {stepName.get(e.step_id)}</span>}
-            {typeof e.payload.name === "string" && <span className="opacity-70">· {e.payload.name}</span>}
-            {!e.mine && <span className="opacity-60">· {t("byOther")}</span>}
-          </li>
-        ))}
-      </ol>
-      )}
-    </section>
-  );
-}
-
-/** Message keys cannot contain dots: "step.added" -> "step_added". */
-function eventKey(eventType: string): string {
-  return eventType.replace(/\./g, "_");
 }

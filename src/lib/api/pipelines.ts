@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
-import type { UploadFile } from "@/lib/api/docgen";
+import type { Draft, DraftJob, UploadFile } from "@/lib/api/docgen";
 
 // A user's IRB pipelines (owner only): one per project and hospital, with steps, documents
 // (versioned by name) and a history. Served by the backend; the browser never reads the tables.
@@ -40,17 +40,41 @@ export type PipelineStep = {
   decided_on: string | null;
   note: string;
   deleted_at: string | null;
-  documents: StepDocument[];
-  checklist: { name: string; uploaded: boolean }[];
+};
+
+/** A step row of the overview: counts only; the documents are on the step page. */
+export type OverviewStep = PipelineStep & {
+  documents: number; // live documents with at least one file
+  required: number; // checklist names of the step type
+  required_missing: number;
+  drafts: number; // the user's drafts made in this step
+  open_jobs: number; // draft jobs queued or running for this step
 };
 
 export type PipelineStatus = { key: string; label: string; closed: boolean; archived: boolean };
 
+/** The pipeline overview (one row per step). */
 export type PipelineDetail = {
   pipeline: PipelineSummary;
-  steps: PipelineStep[];
+  steps: OverviewStep[];
   statuses: PipelineStatus[];
   step_types: { id: number; name: string; description: string }[];
+};
+
+/**
+ * The step page in one call. A removed step, or a step of a removed pipeline, still comes
+ * back (the page shows it read-only); previous / next skip removed steps.
+ */
+export type StepPage = {
+  pipeline: PipelineSummary;
+  step: PipelineStep;
+  documents: StepDocument[];
+  checklist: { name: string; uploaded: boolean }[];
+  drafts: Draft[];
+  jobs: DraftJob[]; // open, and failed in the last 24 hours
+  previous_step_id: number | null;
+  next_step_id: number | null;
+  statuses: PipelineStatus[];
 };
 
 export type PipelineEvent = {
@@ -109,7 +133,9 @@ export const pipelineApi = {
   get: (id: number) => apiFetch<PipelineDetail>(`/pipelines/${id}`),
   remove: (id: number) => apiFetch<unknown>(`/pipelines/${id}`, { method: "DELETE" }),
   restore: (id: number) => apiFetch<unknown>(`/pipelines/${id}/restore`, { method: "POST" }),
-  history: (id: number) => apiFetch<PipelineEvent[]>(`/pipelines/${id}/history`),
+  history: (id: number, stepId?: number) =>
+    apiFetch<PipelineEvent[]>(`/pipelines/${id}/history${stepId === undefined ? "" : `?step_id=${stepId}`}`),
+  getStep: (id: number, stepId: number) => apiFetch<StepPage>(step(id, stepId)),
 
   addStep: (id: number, body: { name?: string | null; step_type_id?: number | null }) =>
     apiFetch<PipelineStep>(`/pipelines/${id}/steps`, json("POST", body)),

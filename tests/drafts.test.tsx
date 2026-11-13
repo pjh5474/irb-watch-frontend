@@ -405,6 +405,17 @@ describe("DraftEditor", () => {
     expect(await screen.findByText("Saved as version 3.")).toBeTruthy();
   });
 
+  it("links back to the pipeline step only for a draft made in one", async () => {
+    show(<DraftEditor id="d-1" />);
+    await screen.findByLabelText("Edit");
+    expect(screen.queryByRole("link", { name: "Back to the pipeline step" })).toBeNull();
+    cleanup();
+    state.detail = { ...structuredClone(DETAIL), pipeline_id: 9, draft: { ...DETAIL.draft, pipeline_step_id: 21 } };
+    show(<DraftEditor id="d-1" />);
+    const back = await screen.findByRole("link", { name: "Back to the pipeline step" });
+    expect(back.getAttribute("href")).toBe("/pipelines/9/steps/21");
+  });
+
   it("a revision is shown even after an edit that was typed and undone", async () => {
     show(<DraftEditor id="d-1" />);
     const editor = (await screen.findByLabelText("Edit")) as HTMLTextAreaElement;

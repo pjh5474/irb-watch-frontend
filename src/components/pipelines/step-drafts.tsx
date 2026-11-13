@@ -10,50 +10,49 @@ import {
   DocumentPicker,
   sourcesNeedingAgreement,
 } from "@/components/drafts/document-picker";
-import { DraftJobLines, JOBS_KEY, useDraftJobs } from "@/components/drafts/draft-jobs";
+import { DraftJobLines, JOBS_KEY } from "@/components/drafts/draft-jobs";
+import { errorText } from "@/components/pipelines/shared";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
-import { ApiError } from "@/lib/api/client";
-import { MAX_INSTRUCTION_CHARS, docgenApi, isOpenJob } from "@/lib/api/docgen";
+import { type Draft, type DraftJob, MAX_INSTRUCTION_CHARS, docgenApi, isOpenJob } from "@/lib/api/docgen";
 import { type DraftInputs, type PipelineStep, pipelineApi } from "@/lib/api/pipelines";
 import { pickerSourcesOfHospital } from "@/lib/draft-picker";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
-export const pipelineDraftsKey = (pipelineId: number) => ["docgen", "drafts", "pipeline", pipelineId] as const;
-
-function errorText(e: unknown, t: (key: string) => string): string {
-  if (e instanceof ApiError) return e.status === 0 ? t("unreachable") : e.message || t("failed");
-  return t("failed");
-}
-
 /**
  * The AI drafts of one pipeline step: the drafts made so far (newest first), the job being
  * written or the reason the last one failed, and the "Draft for this step" dialog. A draft is
- * a background job: it goes on if the user leaves, and the step shows its state.
+ * a background job: it goes on if the user leaves, and the step shows its state. The drafts
+ * and jobs come with the step page (one call).
  */
-export function StepDrafts({ pipelineId, step, readOnly }: { pipelineId: number; step: PipelineStep; readOnly: boolean }) {
+export function StepDrafts({
+  pipelineId,
+  step,
+  drafts,
+  jobs,
+  readOnly,
+}: {
+  pipelineId: number;
+  step: PipelineStep;
+  drafts: Draft[];
+  jobs: DraftJob[];
+  readOnly: boolean;
+}) {
   const t = useTranslations("pipelines");
   const format = useFormatter();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const drafts = useQuery({ queryKey: pipelineDraftsKey(pipelineId), queryFn: () => docgenApi.pipelineDrafts(pipelineId) });
-  const jobs = useDraftJobs();
-  const mine = (drafts.data ?? []).filter((d) => d.pipeline_step_id === step.id);
-  const stepJobs = (jobs.data ?? []).filter((j) => j.pipeline_step_id === step.id);
-  const writing = stepJobs.some(isOpenJob);
+  // One open draft per step (the server's rule); a revision of one of its drafts does not block.
+  const writing = jobs.some((j) => isOpenJob(j) && j.kind === "draft");
 
   return (
     <section className="flex flex-col gap-2 text-sm">
-      <h3 className="font-medium">{t("drafts.title")}</h3>
-      {drafts.isError && (
-        <p role="alert" className="text-red-600">
-          {errorText(drafts.error, t)}
-        </p>
-      )}
-      {mine.length > 0 && (
+      <h2 className="font-medium">{t("drafts.title")}</h2>
+      {drafts.length === 0 && jobs.length === 0 && <p className="opacity-70">{t("drafts.none")}</p>}
+      {drafts.length > 0 && (
         <ul className="flex flex-col gap-1">
-          {mine.map((d) => (
+          {drafts.map((d) => (
             <li key={d.id} className="flex flex-wrap items-center gap-2">
               <Link href={`/drafts/${d.id}`} className="underline underline-offset-4">
                 {d.title || t("drafts.untitled")}
@@ -65,7 +64,7 @@ export function StepDrafts({ pipelineId, step, readOnly }: { pipelineId: number;
           ))}
         </ul>
       )}
-      <DraftJobLines jobs={stepJobs} />
+      <DraftJobLines jobs={jobs} />
       {message && (
         <p role="status" className="text-green-700 dark:text-green-400">
           {message}
@@ -138,6 +137,8 @@ function StepDraftDialog({
         await flight.run(async () => {
           try {
             await docgenApi.startStepDraft(step.id, body);
+            // The step page (its jobs), the overview's counts, the Drafts page's job list.
+            await queryClient.invalidateQueries({ queryKey: ["pipelines"] });
             await queryClient.invalidateQueries({ queryKey: JOBS_KEY });
             await queryClient.invalidateQueries({ queryKey: ["docgen", "status"] });
             onStarted();

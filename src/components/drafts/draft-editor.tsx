@@ -230,9 +230,19 @@ export function DraftEditor({ id }: { id: string }) {
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-6">
-      <Link href="/drafts" className="text-sm underline-offset-4 hover:underline">
-        {t("back")}
-      </Link>
+      <div className="flex flex-wrap gap-4 text-sm">
+        <Link href="/drafts" className="underline-offset-4 hover:underline">
+          {t("back")}
+        </Link>
+        {detail.pipeline_id != null && detail.draft.pipeline_step_id != null && (
+          <Link
+            href={`/pipelines/${detail.pipeline_id}/steps/${detail.draft.pipeline_step_id}`}
+            className="underline-offset-4 hover:underline"
+          >
+            {t("backToStep")}
+          </Link>
+        )}
+      </div>
       <h1 className="text-2xl font-semibold break-words">{detail.draft.title || t("editorTitle")}</h1>
       {!!detail.draft.step_files?.length && (
         <p className="text-sm opacity-80">

@@ -16,6 +16,9 @@ export type PipelineSummary = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  site_id?: number | null; // phase B2a: the site (hospital + PI) of this pipeline
+  pi_name?: string;
+  site_no?: string;
 };
 
 export type DocVersion = {
@@ -123,6 +126,7 @@ export type DraftInputs = {
   guide_ids: number[];
   form_template_id: number | null;
   has_instructions: boolean;
+  site_details?: string[]; // names of the site's details that go to the AI service (D18)
 };
 
 export const MAX_PIPELINE_FILE = 20_000_000;
@@ -133,8 +137,9 @@ const step = (pid: number, sid: number) => `/pipelines/${pid}/steps/${sid}`;
 export const pipelineApi = {
   list: (projectId: number, includeRemoved = false) =>
     apiFetch<PipelineSummary[]>(`/projects/${projectId}/pipelines${includeRemoved ? "?include_removed=true" : ""}`),
-  start: (projectId: number, hospitalId: number) =>
-    apiFetch<{ id: number }>(`/projects/${projectId}/pipelines`, json("POST", { hospital_id: hospitalId })),
+  /** A site's pipeline, or (hospital alone) the hospital's unnamed site, made when it has no site. */
+  start: (projectId: number, target: { hospital_id?: number; site_id?: number }) =>
+    apiFetch<{ id: number }>(`/projects/${projectId}/pipelines`, json("POST", target)),
   get: (id: number) => apiFetch<PipelineDetail>(`/pipelines/${id}`),
   remove: (id: number) => apiFetch<unknown>(`/pipelines/${id}`, { method: "DELETE" }),
   restore: (id: number) => apiFetch<unknown>(`/pipelines/${id}/restore`, { method: "POST" }),

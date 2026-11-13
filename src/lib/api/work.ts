@@ -19,6 +19,7 @@ export type WorkStep = {
   required: number;
   required_missing: number;
   mine?: boolean; // in a project the user owns
+  site_label?: string; // "01 · PI 김○○"; empty for an unnamed site
 };
 
 export type Work = {

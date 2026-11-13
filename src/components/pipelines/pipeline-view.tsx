@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { History, Note, detailKey, errorText, useChange } from "@/components/pipelines/shared";
 import { DueBadge } from "@/components/pipelines/step/step-header";
+import { SiteDetails } from "@/components/sites/site-details";
+import { siteLabel } from "@/lib/api/sites";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
@@ -46,6 +48,7 @@ export function PipelineView({ id }: { id: number }) {
           ← {t("backToProject")}
         </Link>
         <h1 className="text-2xl font-semibold">{t("title", { name: p.hospital_name ?? t("siteUnavailable") })}</h1>
+        {siteLabel(p) && <p className="text-sm font-medium">{siteLabel(p)}</p>}
         <p className="text-sm opacity-70">{t("progress", { closed: p.closed_steps, steps: p.steps })}</p>
         {!p.in_project && <p className="text-sm text-amber-700 dark:text-amber-300">{t("notInProjectNote")}</p>}
         {viewOnly && <p className="text-sm text-amber-700 dark:text-amber-300">{t("viewOnlyNote")}</p>}
@@ -94,6 +97,15 @@ export function PipelineView({ id }: { id: number }) {
             </ul>
           )}
         </section>
+      )}
+
+      {p.site_id != null && (
+        <details className="rounded border p-4">
+          <summary className="cursor-pointer text-sm font-medium">{t("siteDetails")}</summary>
+          <div className="mt-3">
+            <SiteDetails siteId={p.site_id} readOnly={readOnly} steps={live.map((s) => ({ id: s.id, name: s.name }))} />
+          </div>
+        </details>
       )}
 
       <History id={id} stepNames={new Map(d.steps.map((s) => [s.id, s.name]))} />

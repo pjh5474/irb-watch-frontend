@@ -115,7 +115,25 @@ const state = vi.hoisted(() => ({
   boards: [] as unknown[],
   inputs: null as unknown,
   page: {} as Record<string, unknown>, // overrides of the step page
+  sites: [] as unknown[],
 }));
+
+vi.mock("@/lib/api/sites", async () => {
+  const actual = await vi.importActual<typeof import("../src/lib/api/sites")>("../src/lib/api/sites");
+  return {
+    ...actual,
+    siteApi: {
+      list: async () => state.sites,
+      create: async (projectId: number, body: unknown) => {
+        state.calls.push(["createSite", projectId, body]);
+        return {};
+      },
+      remove: async () => ({}),
+      restore: async () => ({}),
+      facts: async () => ({ site: state.sites[0], facts: [], suggested: [] }),
+    },
+  };
+});
 
 const JOB = (status: string, extra: object = {}) => ({
   id: "job-1",
@@ -190,9 +208,9 @@ vi.mock("@/lib/api/pipelines", async () => {
     ...actual,
     pipelineApi: {
       list: async () => state.list,
-      start: async (projectId: number, hospitalId: number) => {
+      start: async (projectId: number, target: unknown) => {
         if (state.startError) throw state.startError;
-        state.calls.push(["start", projectId, hospitalId]);
+        state.calls.push(["start", projectId, target]);
         return { id: 77 };
       },
       get: async () => DETAIL,
@@ -242,6 +260,7 @@ beforeEach(() => {
   state.boards = [];
   state.inputs = INPUTS;
   state.page = {};
+  state.sites = [];
 });
 
 afterEach(cleanup);
@@ -257,22 +276,41 @@ describe("helpers", () => {
   });
 });
 
-describe("ProjectPipelines", () => {
-  it("starts a pipeline for a hospital without one and links the others", async () => {
-    state.list = [SUMMARY];
+describe("ProjectPipelines (sites per PI)", () => {
+  const SITE = { id: 30, project_id: 1, hospital_id: 4, site_no: "01", pi_name: "Kim", note: "", created_at: "", updated_at: "", deleted_at: null };
+
+  it("groups sites by hospital: a site's pipeline opens, a hospital without sites starts in one click", async () => {
+    state.list = [{ ...SUMMARY, site_id: 30, pi_name: "Kim", site_no: "01" }];
+    state.sites = [SITE, { ...SITE, id: 31, site_no: "02", pi_name: "Lee" }];
     wrap(<ProjectPipelines projectId={1} hospitals={[{ id: 4, name: "SNUH" }, { id: 5, name: "Ewha" }]} />);
-    expect((await screen.findByRole("link", { name: "Open" })).getAttribute("href")).toBe("/pipelines/9");
+    expect(await screen.findByText("01 · PI Kim")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open" }).getAttribute("href")).toBe("/pipelines/9");
     expect(screen.getByText("1 of 2 steps finished")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Start IRB pipeline" }));
+    // Lee's site has no pipeline yet; Ewha has no site: one click makes its unnamed site.
+    const starts = screen.getAllByRole("button", { name: "Start IRB pipeline" });
+    expect(starts).toHaveLength(2);
+    fireEvent.click(starts[0]);
     await vi.waitFor(() => expect(state.pushed).toEqual(["/pipelines/77"]));
-    expect(state.calls).toEqual([["start", 1, 5]]);
+    expect(state.calls).toEqual([["start", 1, { site_id: 31 }]]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Start IRB pipeline" })[1]);
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["start", 1, { hospital_id: 5 }]));
+  });
+
+  it("adds a PI to a hospital", async () => {
+    wrap(<ProjectPipelines projectId={1} hospitals={[{ id: 4, name: "SNUH" }]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add a PI" }));
+    const form = within(screen.getByRole("form", { name: "Add a PI" }));
+    fireEvent.change(form.getByLabelText("PI name"), { target: { value: " Park " } });
+    fireEvent.change(form.getByLabelText("Site number"), { target: { value: "03" } });
+    fireEvent.click(form.getByRole("button", { name: "Add" }));
+    await vi.waitFor(() => expect(state.calls).toEqual([["createSite", 1, { hospital_id: 4, pi_name: "Park", site_no: "03" }]]));
   });
 
   it("shows the server's reason when starting fails", async () => {
-    state.startError = new ApiError(409, "this hospital already has a pipeline in the project");
+    state.startError = new ApiError(409, "this hospital has PIs; start the pipeline of a PI's site");
     wrap(<ProjectPipelines projectId={1} hospitals={[{ id: 5, name: "Ewha" }]} />);
     fireEvent.click(await screen.findByRole("button", { name: "Start IRB pipeline" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("already has a pipeline");
+    expect((await screen.findByRole("alert")).textContent).toContain("has PIs");
   });
 
   it("lists pipelines of hospitals no longer in the project", async () => {

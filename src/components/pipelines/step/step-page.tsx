@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { JOB_POLL_MS, isOpenJob } from "@/lib/api/docgen";
 import { pipelineApi } from "@/lib/api/pipelines";
+import { siteLabel } from "@/lib/api/sites";
 
 /**
  * One step of a pipeline on its own page (phase A): header, documents, AI drafts and the
@@ -70,6 +71,7 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
         <span aria-hidden>›</span>
         <Link href={`/pipelines/${id}`} className="underline-offset-4 hover:underline">
           {t("title", { name: p.hospital_name ?? t("siteUnavailable") })}
+          {siteLabel(p) && ` · ${siteLabel(p)}`}
         </Link>
         <span aria-hidden>›</span>
         <span className="opacity-70">{step.name}</span>

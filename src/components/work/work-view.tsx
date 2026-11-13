@@ -106,6 +106,7 @@ function StepLink({ step }: { step: WorkStep }) {
       </Link>
       <span className="text-xs opacity-70">
         {step.project_name ?? t("projectGone")} · {step.hospital_name ?? t("hospitalGone")}
+        {step.site_label ? ` · ${step.site_label}` : ""}
       </span>
     </span>
   );

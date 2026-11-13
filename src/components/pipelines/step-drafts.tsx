@@ -281,6 +281,10 @@ function DialogForm({
         />
       </label>
 
+      {!!inputs.site_details?.length && (
+        <p className="text-xs opacity-80">{t("drafts.siteDetails", { names: inputs.site_details.join(", ") })}</p>
+      )}
+
       {sharesMembersOnly && (
         <p role="note" className="rounded bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/30 dark:text-amber-100">
           {t("drafts.sharedMembersOnly")}

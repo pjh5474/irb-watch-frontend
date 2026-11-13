@@ -114,6 +114,7 @@ export type Draft = {
   template?: DraftTemplate | null; // null = a Markdown draft (older servers send nothing)
   pipeline_step_id?: number | null; // made in this IRB pipeline step
   step_files?: StepFileRef[]; // the user's own step files it is written from
+  author?: string | null; // a shared pipeline draft of another member: their name
 };
 
 /** One of the user's own pipeline step files a draft is written from. */
@@ -133,6 +134,8 @@ export type DraftJob = {
   pipeline_step_id: number | null;
   created_at: string;
   finished_at: string | null;
+  mine?: boolean; // false: started by another member of a shared project
+  started_by?: string | null; // their name
 };
 
 export const isOpenJob = (job: Pick<DraftJob, "status">) => job.status === "queued" || job.status === "running";
@@ -158,6 +161,7 @@ export type DraftDetail = {
   versions: DraftVersion[];
   guides: Guide[];
   pipeline_id?: number | null; // the pipeline of the draft's step ("Back to step"); null: standalone
+  can_edit?: boolean; // false: read only (a platform admin's support access to a shared draft)
 };
 
 export type UploadFile = { filename: string; content_base64: string };

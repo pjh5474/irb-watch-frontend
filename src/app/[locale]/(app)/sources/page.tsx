@@ -3,6 +3,7 @@ import { Pagination } from "@/components/pagination";
 import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
 import { clampPage, pageCount, pageRange, parsePage } from "@/lib/paging";
+import { myProjectsFilter } from "@/lib/project-scope";
 import { siteOf } from "@/lib/site-groups";
 import { dataMayBeOld, isManual, sourceHealth } from "@/lib/source-health";
 import { createClient } from "@/lib/supabase/server";
@@ -40,6 +41,7 @@ export default async function SourcesPage({
   const { data: projects } = await supabase
     .from("projects")
     .select("id, name, project_hospitals(hospital_id)")
+    .or(await myProjectsFilter(supabase))
     .order("name");
   if (!access) {
     return (

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { Pagination } from "@/components/pagination";
 import { ProjectPipelines } from "@/components/pipelines/project-pipelines";
 import { type HospitalRow, ProjectHospitals, ProjectSettings } from "@/components/projects";
+import { ProjectAccessProvider } from "@/components/projects/project-access";
+import { ProjectMembers } from "@/components/projects/project-members";
 import { Link } from "@/i18n/navigation";
 import { pageCount, parsePage } from "@/lib/paging";
 import { parseView, PROJECT_PAGE_SIZE, TIMELINE_TYPES } from "@/lib/projects";
@@ -28,7 +30,8 @@ export default async function ProjectPage({
   const supabase = await createClient();
   const date = (iso: string) => format.dateTime(new Date(iso), { dateStyle: "medium" });
 
-  // Row-level security: another user's project simply comes back empty.
+  // Row-level security: a project the user may not open simply comes back empty (owner,
+  // members, organization admins and platform admins may open it; phase B1).
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("id, name, note, project_hospitals(hospital_id, added_at, hospitals(id, name))")
@@ -177,6 +180,7 @@ export default async function ProjectPage({
   );
 
   return (
+    <ProjectAccessProvider projectId={projectId}>
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <header className="flex flex-col gap-2">
         <Link href="/projects" className="text-sm underline-offset-4 hover:underline">
@@ -185,6 +189,11 @@ export default async function ProjectPage({
         <h1 className="text-2xl font-semibold">{project.name}</h1>
         {project.note && <p className="text-sm whitespace-pre-wrap opacity-80">{project.note}</p>}
       </header>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">{t("membersTitle")}</h2>
+        <ProjectMembers projectId={projectId} />
+      </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">{t("sitesTitle")}</h2>
@@ -220,5 +229,6 @@ export default async function ProjectPage({
         </div>
       </details>
     </main>
+    </ProjectAccessProvider>
   );
 }

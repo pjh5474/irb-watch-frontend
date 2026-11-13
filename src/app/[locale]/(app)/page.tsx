@@ -7,6 +7,7 @@ import { RecentDocuments } from "@/components/recent-documents";
 import { Link } from "@/i18n/navigation";
 import { allowedSources, FEED_PAGE_SIZE, filterParams, parseFeedFilters, since } from "@/lib/feed-filters";
 import { pageCount, parsePage } from "@/lib/paging";
+import { myProjectsFilter } from "@/lib/project-scope";
 import { createClient } from "@/lib/supabase/server";
 
 const PRIORITY_STYLE: Record<string, string> = {
@@ -39,11 +40,12 @@ export default async function FeedPage({
     .order("name");
   const names = new Map((sources ?? []).map((s) => [s.id, s.name]));
 
-  // The user's own projects (row-level security), for the "only my project's sites" filter. A
-  // project lists hospitals: its sites are the readable boards of those hospitals.
+  // The user's own and shared projects, for the "only my project's sites" filter. A project
+  // lists hospitals: its sites are the readable boards of those hospitals.
   const { data: projects } = await supabase
     .from("projects")
     .select("id, name, project_hospitals(hospital_id)")
+    .or(await myProjectsFilter(supabase))
     .order("name");
   const project = (projects ?? []).find((p) => p.id === filters.project);
   const projectHospitals = new Set(project ? project.project_hospitals.map((l) => l.hospital_id) : []);

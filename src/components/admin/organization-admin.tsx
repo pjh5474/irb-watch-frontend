@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
   METRICS,
+  ORG_ROLES,
   type Counts,
+  type OrgRole,
   type Organization,
   currentMonth,
   orgApi,
@@ -245,6 +247,19 @@ function Members({
     });
   }
 
+  async function setRole(userId: string, email: string | null, role: OrgRole) {
+    setMessage(null);
+    await move.run(async () => {
+      try {
+        await orgApi.setOrgRole(userId, role);
+        setMessage({ kind: "ok", text: t("orgs.roleSet", { email: email ?? userId, role: t(`orgs.roles.${role}`) }) });
+        await members.refetch();
+      } catch (e) {
+        setMessage({ kind: "error", text: adminErrorText(e, t) });
+      }
+    });
+  }
+
   if (members.isLoading) return <p className="text-sm opacity-70">{t("loading")}</p>;
   if (members.isError)
     return (
@@ -255,6 +270,8 @@ function Members({
   return (
     <div className="flex flex-col gap-2 rounded bg-neutral-50 p-3 dark:bg-neutral-900">
       {members.data?.length === 0 && <p className="text-sm opacity-70">{t("orgs.noMembers")}</p>}
+      <p className="text-xs opacity-70">{t("orgs.rolesHint")}</p>
+      {others.length > 0 && <p className="text-xs opacity-70">{t("orgs.moveProjectsHint")}</p>}
       <ul className="flex flex-col gap-2">
         {(members.data ?? []).map((m) => (
           <li key={m.user_id} className="flex flex-wrap items-center gap-2 text-sm">
@@ -262,6 +279,21 @@ function Members({
             {m.display_name && <span className="opacity-70">({m.display_name})</span>}
             {m.role === "admin" && <Badge>{t("orgs.platformAdmin")}</Badge>}
             {m.deleted_at && <Badge>{t("orgs.deletedUser")}</Badge>}
+            <label className="flex items-center gap-1 text-xs">
+              {t("orgs.orgRole")}
+              <select
+                className="rounded border px-1 py-0.5"
+                value={m.org_role ?? "member"}
+                disabled={move.busy}
+                onChange={(e) => void setRole(m.user_id, m.email, e.target.value as OrgRole)}
+              >
+                {ORG_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {t(`orgs.roles.${r}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
             {others.length > 0 && (
               <span className="ml-auto flex items-center gap-1">
                 <label className="sr-only" htmlFor={`move-${m.user_id}`}>

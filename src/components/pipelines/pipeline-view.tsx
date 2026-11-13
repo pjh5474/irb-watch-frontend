@@ -34,6 +34,8 @@ export function PipelineView({ id }: { id: number }) {
   const d = detail.data;
   const p = d.pipeline;
   const removed = p.deleted_at !== null;
+  const viewOnly = d.access === "read"; // a platform admin's support access: change nothing
+  const readOnly = removed || viewOnly;
   const live = d.steps.filter((s) => s.deleted_at === null);
   const gone = d.steps.filter((s) => s.deleted_at !== null);
 
@@ -46,12 +48,15 @@ export function PipelineView({ id }: { id: number }) {
         <h1 className="text-2xl font-semibold">{t("title", { name: p.hospital_name ?? t("siteUnavailable") })}</h1>
         <p className="text-sm opacity-70">{t("progress", { closed: p.closed_steps, steps: p.steps })}</p>
         {!p.in_project && <p className="text-sm text-amber-700 dark:text-amber-300">{t("notInProjectNote")}</p>}
+        {viewOnly && <p className="text-sm text-amber-700 dark:text-amber-300">{t("viewOnlyNote")}</p>}
         {removed && (
           <div className="flex flex-wrap items-center gap-2 text-sm text-amber-700 dark:text-amber-300">
             {t("removedNote")}
-            <Button size="sm" variant="outline" disabled={change.busy} onClick={() => change.run(() => pipelineApi.restore(id), t("restored"))}>
-              {t("restore")}
-            </Button>
+            {!viewOnly && (
+              <Button size="sm" variant="outline" disabled={change.busy} onClick={() => change.run(() => pipelineApi.restore(id), t("restored"))}>
+                {t("restore")}
+              </Button>
+            )}
           </div>
         )}
         <Note message={change.message} />
@@ -60,11 +65,11 @@ export function PipelineView({ id }: { id: number }) {
       {live.length === 0 && <p className="text-sm opacity-70">{t("noSteps")}</p>}
       <ol className="flex flex-col gap-2">
         {live.map((step, i) => (
-          <StepRow key={step.id} pipelineId={id} step={step} statuses={d.statuses} index={i} order={live.map((s) => s.id)} readOnly={removed} />
+          <StepRow key={step.id} pipelineId={id} step={step} statuses={d.statuses} index={i} order={live.map((s) => s.id)} readOnly={readOnly} />
         ))}
       </ol>
 
-      {!removed && <AddStep pipelineId={id} types={d.step_types} />}
+      {!readOnly && <AddStep pipelineId={id} types={d.step_types} />}
 
       {gone.length > 0 && (
         <section className="flex flex-col gap-2 text-sm">
@@ -79,7 +84,7 @@ export function PipelineView({ id }: { id: number }) {
                   <Link href={`/pipelines/${id}/steps/${s.id}`} className="flex-1 opacity-70 underline-offset-4 hover:underline">
                     {s.name}
                   </Link>
-                  {!removed && (
+                  {!readOnly && (
                     <Button size="sm" variant="outline" disabled={change.busy} onClick={() => change.run(() => pipelineApi.restoreStep(id, s.id), t("restored"))}>
                       {t("restore")}
                     </Button>
@@ -93,7 +98,7 @@ export function PipelineView({ id }: { id: number }) {
 
       <History id={id} stepNames={new Map(d.steps.map((s) => [s.id, s.name]))} />
 
-      {!removed && <RemovePipeline id={id} />}
+      {!readOnly && <RemovePipeline id={id} />}
     </main>
   );
 }

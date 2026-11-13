@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { pipelinesKey } from "@/components/pipelines/project-pipelines";
+import { useProjectAccess } from "@/components/projects/project-access";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useRouter } from "@/i18n/navigation";
@@ -20,8 +21,9 @@ import { createClient } from "@/lib/supabase/client";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 // The editing parts of the projects screens. The pages read the data on the server; these
-// components write through Supabase (row-level security: owner only, readable sites only) and
-// then refresh the page, so what is shown always comes from the database.
+// components write through Supabase (row-level security: whoever may edit the project; only
+// the owner deletes it) and then refresh the page, so what is shown always comes from the
+// database. Inside a ProjectAccessProvider they hide what the user may not change.
 
 type Message = { kind: "ok" | "error"; text: string } | null;
 
@@ -126,6 +128,7 @@ export function ProjectSettings({ id, name: savedName, note: savedNote }: { id: 
   const [note, setNote] = useState(savedNote ?? "");
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<Message>(null);
+  const { canEdit, isOwner } = useProjectAccess();
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -160,6 +163,8 @@ export function ProjectSettings({ id, name: savedName, note: savedNote }: { id: 
     });
   }
 
+  if (!canEdit) return <p className="text-sm opacity-70">{t("readOnly")}</p>;
+
   return (
     <div className="flex flex-col gap-3">
       <form onSubmit={save} className="flex flex-col gap-3">
@@ -169,7 +174,7 @@ export function ProjectSettings({ id, name: savedName, note: savedNote }: { id: 
             {flight.busy && <Spinner aria-hidden />}
             {t("save")}
           </Button>
-          {confirming ? (
+          {!isOwner ? null : confirming ? (
             <span className="flex flex-wrap items-center gap-2 text-sm">
               {t("confirmDelete")}
               <Button type="button" size="sm" variant="destructive" disabled={flight.busy} onClick={() => void remove()}>
@@ -218,6 +223,7 @@ export function ProjectHospitals({
   const pipelines = useQuery({ queryKey: [...pipelinesKey(projectId), false], queryFn: () => pipelineApi.list(projectId) });
   const withPipeline = new Set((pipelines.data ?? []).map((p) => p.hospital_id));
   const [confirming, setConfirming] = useState<number | null>(null);
+  const { canEdit } = useProjectAccess();
 
   async function add() {
     setMessage(null);
@@ -267,9 +273,11 @@ export function ProjectHospitals({
             <div className="flex flex-wrap items-center gap-2">
               <span className="flex-1 font-medium">{h.name}</span>
               {confirming === h.id && <span className="text-xs text-amber-700 dark:text-amber-300">{t("removeSiteWithPipeline")}</span>}
-              <Button size="sm" variant="ghost" disabled={flight.busy} onClick={() => void remove(h.id)}>
-                {confirming === h.id ? t("removeSiteAnyway") : t("removeSite")}
-              </Button>
+              {canEdit && (
+                <Button size="sm" variant="ghost" disabled={flight.busy} onClick={() => void remove(h.id)}>
+                  {confirming === h.id ? t("removeSiteAnyway") : t("removeSite")}
+                </Button>
+              )}
               {confirming === h.id && (
                 <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
                   {t("cancel")}
@@ -282,7 +290,7 @@ export function ProjectHospitals({
           </li>
         ))}
       </ul>
-      {full ? (
+      {!canEdit ? null : full ? (
         <p className="text-xs opacity-70">{t("sitesFull", { max: MAX_SITES })}</p>
       ) : available.length === 0 ? (
         <p className="text-xs opacity-70">{t("noSitesLeft")}</p>

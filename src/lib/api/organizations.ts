@@ -19,7 +19,11 @@ export type OrgMember = {
   role: string;
   created_at: string;
   deleted_at: string | null;
+  org_role?: OrgRole; // owner and admin open every pipeline project of the organization
 };
+
+export const ORG_ROLES = ["owner", "admin", "member"] as const;
+export type OrgRole = (typeof ORG_ROLES)[number];
 
 export const METRICS = ["chat_messages", "summaries", "drafts", "revisions", "exports", "downloads"] as const;
 export type Metric = (typeof METRICS)[number];
@@ -57,6 +61,8 @@ export const orgApi = {
   remove: (id: string) => apiFetch<Organization>(`/admin/organizations/${id}`, { method: "DELETE" }),
   restore: (id: string) => apiFetch<Organization>(`/admin/organizations/${id}/restore`, { method: "POST" }),
   members: (id: string) => apiFetch<OrgMember[]>(`/admin/organizations/${id}/members`),
+  setOrgRole: (userId: string, role: OrgRole) =>
+    apiFetch<{ user_id: string; org_role: OrgRole }>(`/admin/users/${userId}/organization-role`, json("PUT", { role })),
   moveUser: (userId: string, organizationId: string) =>
     apiFetch<unknown>(`/admin/users/${userId}/organization`, json("PUT", { organization_id: organizationId })),
   monthStats: (month: string) => apiFetch<MonthStats>(`/admin/organizations/stats?month=${month}`),

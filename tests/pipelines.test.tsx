@@ -67,6 +67,7 @@ const MEETING: PipelineStep = {
 
 const DETAIL: PipelineDetail = {
   pipeline: SUMMARY,
+  access: "owner",
   statuses: STATUSES,
   step_types: [{ id: 2, name: "Amendment", description: "" }],
   steps: [
@@ -78,6 +79,8 @@ const DETAIL: PipelineDetail = {
 
 const PAGE: StepPage = {
   pipeline: SUMMARY,
+  access: "owner",
+  shared: false,
   step: INITIAL,
   statuses: STATUSES,
   checklist: [
@@ -426,6 +429,25 @@ describe("StepPageView", () => {
     spy.mockRestore();
   });
 
+  it("shows support access read-only: no edits, files still downloadable", async () => {
+    state.page = { access: "read" };
+    await stepPage();
+    expect(screen.getByText(/You can read this pipeline but not change it/)).toBeTruthy();
+    expect((screen.getByLabelText("Status") as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.queryByRole("form", { name: "Upload a document" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Draft for this step" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove step" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Download the latest Protocol" })).toBeTruthy();
+  });
+
+  it("names a colleague's draft and job in a shared project", async () => {
+    state.drafts = [{ id: "d-1", title: "Shared draft", pipeline_step_id: 21, updated_at: "2026-11-12T02:00:00Z", documents: [], author: "Kim" }];
+    state.jobs = [JOB("running", { mine: false, started_by: "Lee" })];
+    await stepPage();
+    expect(screen.getByText("by Kim")).toBeTruthy();
+    expect(screen.getByText(/being written.*\(started by Lee\)/)).toBeTruthy();
+  });
+
   it("opens this step's history only", async () => {
     await stepPage();
     fireEvent.click(screen.getByRole("button", { name: "Show this step's history" }));
@@ -500,6 +522,17 @@ describe("AI drafts of a step", () => {
     fireEvent.click(dialog.getByRole("button", { name: "Start the draft" }));
     expect((await dialog.findByRole("alert")).textContent).toContain("2 of your drafts");
     expect(state.calls).toEqual([]);
+  });
+
+  it("warns that a members-only board goes into a draft every project member reads (O22)", async () => {
+    state.inputs = { ...INPUTS, allow_board_documents: true };
+    state.boards = [{ id: 86, name: "Kimpo : forms", requires_login: true, ai_enabled: true }];
+    state.page = { shared: true };
+    const step = await draftsOf();
+    fireEvent.click(await step.findByRole("button", { name: "Draft for this step" }));
+    const dialog = within(await step.findByRole("form", { name: "Draft for this step" }));
+    await dialog.findByRole("option", { name: /Kimpo : forms/ });
+    expect(dialog.queryByText(/shared with the project's members/)).toBeNull(); // nothing chosen yet
   });
 
   it("offers the hospital's board documents only when the step type allows them", async () => {

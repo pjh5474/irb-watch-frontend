@@ -1,5 +1,6 @@
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 import { NewProjectForm } from "@/components/projects";
+import { OrganizationProjectsLink, SharedProjects } from "@/components/projects/shared-projects";
 import { Link } from "@/i18n/navigation";
 import { MAX_PROJECTS } from "@/lib/projects";
 import { createClient } from "@/lib/supabase/server";
@@ -11,11 +12,16 @@ export default async function ProjectsPage({ params }: { params: Promise<{ local
   const format = await getFormatter();
   const supabase = await createClient();
 
-  // Row-level security returns only the user's own projects. Hospital names are readable by
-  // every signed-in user.
+  // The user's own projects. Row-level security also lets members, organization admins and
+  // platform admins read other projects (phase B1), so the list asks for its own rows; shared
+  // projects come from the server below with their owner's name. Hospital names are readable
+  // by every signed-in user.
+  const { data: claims } = await supabase.auth.getClaims();
+  const me = claims?.claims?.sub ?? "";
   const { data: projects, error } = await supabase
     .from("projects")
     .select("id, name, note, updated_at, project_hospitals(hospital_id, hospitals(name))")
+    .eq("user_id", me)
     .order("updated_at", { ascending: false });
 
   const full = (projects?.length ?? 0) >= MAX_PROJECTS;
@@ -55,6 +61,9 @@ export default async function ProjectsPage({ params }: { params: Promise<{ local
           );
         })}
       </ul>
+
+      <SharedProjects />
+      <OrganizationProjectsLink />
 
       {!error && (
         <section className="flex flex-col gap-3 rounded border p-4">

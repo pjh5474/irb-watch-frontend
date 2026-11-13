@@ -121,6 +121,9 @@ export function DraftEditor({ id }: { id: string }) {
   const newest = versions[versions.length - 1];
   const shown = versions.find((v) => v.version_no === viewing) ?? newest;
   const isNewest = shown.version_no === newest.version_no;
+  // A platform admin's support access to a shared pipeline draft reads only (phase B1).
+  const canEdit = detail.can_edit !== false;
+  const editable = isNewest && canEdit;
   const form = detail.draft.template ?? null; // a draft that fills a form: answers per field
   const text = isNewest ? (buffer ?? newest.markdown) : shown.markdown;
   const shownAnswers = isNewest ? (answers ?? newest.fields ?? {}) : (shown.fields ?? {});
@@ -333,7 +336,7 @@ export function DraftEditor({ id }: { id: string }) {
               <FieldEditor
                 fields={form.fields}
                 values={shownAnswers}
-                readOnly={!isNewest}
+                readOnly={!editable}
                 onChange={(next) => {
                   if (answers === null) setBufferBase(newest.version_no);
                   setAnswers(next);
@@ -355,7 +358,7 @@ export function DraftEditor({ id }: { id: string }) {
                   aria-label={t("edit")}
                   className={`min-h-[28rem] rounded border p-3 font-mono text-sm ${tab === "edit" ? "" : "hidden"} md:block`}
                   value={text}
-                  readOnly={!isNewest}
+                  readOnly={!editable}
                   onChange={(e) => {
                     if (buffer === null) setBufferBase(newest.version_no);
                     setBuffer(e.target.value);
@@ -370,7 +373,7 @@ export function DraftEditor({ id }: { id: string }) {
               </div>
             </>
           )}
-          {isNewest && (
+          {editable && (
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" onClick={saveEdit} disabled={!dirty || tooLong || save.busy} aria-busy={save.busy}>
                 {save.busy && <Spinner aria-hidden />}
@@ -389,6 +392,8 @@ export function DraftEditor({ id }: { id: string }) {
         </section>
       )}
 
+      {!canEdit && <p className="text-sm text-amber-700 dark:text-amber-300">{t("viewOnly")}</p>}
+      {canEdit && (
       <Section icon={Sparkles} accent="violet" title={t("revise")}>
         <textarea
           className="min-h-20 rounded border p-2 text-sm"
@@ -420,6 +425,7 @@ export function DraftEditor({ id }: { id: string }) {
         </div>
         {revise.busy && <p className="text-sm opacity-70" role="status">{t("writingHint")}</p>}
       </Section>
+      )}
 
       {message && (
         <div className="flex flex-wrap items-center gap-2">

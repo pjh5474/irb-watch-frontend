@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { DraftJobLines } from "@/components/drafts/draft-jobs";
 import { errorText } from "@/components/pipelines/shared";
 import { DueBadge } from "@/components/pipelines/step/step-header";
@@ -16,7 +17,8 @@ import { type WorkStep, workApi } from "@/lib/api/work";
 export function WorkView() {
   const t = useTranslations("work");
   const tp = useTranslations("pipelines");
-  const work = useQuery({ queryKey: ["work"], queryFn: workApi.get });
+  const [mine, setMine] = useState(false);
+  const work = useQuery({ queryKey: ["work", mine], queryFn: () => workApi.get(mine) });
 
   if (work.isLoading) return <main className="mx-auto w-full max-w-4xl p-6 text-sm opacity-70">{tp("loading")}</main>;
   if (work.isError || !work.data)
@@ -35,6 +37,10 @@ export function WorkView() {
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <p className="text-sm opacity-70">{t("intro", { days: w.window_days })}</p>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />
+          {t("mineOnly")}
+        </label>
       </header>
       {empty && <p className="text-sm opacity-70">{t("nothing")}</p>}
 

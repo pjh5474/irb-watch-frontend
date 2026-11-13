@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { useProjectAccess } from "@/components/projects/project-access";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link, useRouter } from "@/i18n/navigation";
@@ -34,6 +35,7 @@ export function ProjectPipelines({ projectId, hospitals }: { projectId: number; 
   });
   const flight = useSingleFlight();
   const [error, setError] = useState<string | null>(null);
+  const { canEdit } = useProjectAccess();
 
   async function start(hospitalId: number) {
     setError(null);
@@ -91,6 +93,8 @@ export function ProjectPipelines({ projectId, hospitals }: { projectId: number; 
                     {t("open")}
                   </Link>
                 </>
+              ) : !canEdit ? (
+                <span className="text-xs opacity-60">{t("noPipeline")}</span>
               ) : (
                 <Button size="sm" variant="outline" disabled={flight.busy} onClick={() => void start(hospital.id)}>
                   {flight.busy && <Spinner aria-hidden />}
@@ -129,9 +133,11 @@ export function ProjectPipelines({ projectId, hospitals }: { projectId: number; 
               <span className="flex-1 opacity-70">
                 {p.hospital_name ?? t("siteUnavailable")} · {t("removedOn", { date: (p.deleted_at ?? "").slice(0, 10) })}
               </span>
-              <Button size="sm" variant="outline" disabled={flight.busy} onClick={() => void restore(p.id)}>
-                {t("restore")}
-              </Button>
+              {canEdit && (
+                <Button size="sm" variant="outline" disabled={flight.busy} onClick={() => void restore(p.id)}>
+                  {t("restore")}
+                </Button>
+              )}
             </li>
           ))}
         </ul>

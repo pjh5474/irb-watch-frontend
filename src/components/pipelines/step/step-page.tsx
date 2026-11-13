@@ -58,7 +58,8 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
   const step = d.step;
   const pipelineRemoved = p.deleted_at !== null;
   const stepRemoved = step.deleted_at !== null;
-  const readOnly = pipelineRemoved || stepRemoved;
+  const viewOnly = d.access === "read"; // a platform admin's support access: change nothing
+  const readOnly = pipelineRemoved || stepRemoved || viewOnly;
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
@@ -86,6 +87,7 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
         </span>
       </nav>
 
+      {viewOnly && <p className="text-sm text-amber-700 dark:text-amber-300">{t("viewOnlyNote")}</p>}
       {pipelineRemoved ? (
         <p className="text-sm text-amber-700 dark:text-amber-300">
           {t("pipelineRemovedStepNote")}{" "}
@@ -94,12 +96,20 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
           </Link>
         </p>
       ) : (
-        stepRemoved && <RestoreStep pipelineId={id} stepId={step.id} />
+        stepRemoved && !viewOnly && <RestoreStep pipelineId={id} stepId={step.id} />
       )}
 
       <StepHeader key={`header-${step.id}`} pipelineId={id} step={step} statuses={d.statuses} readOnly={readOnly} />
       <StepDocuments pipelineId={id} page={d} readOnly={readOnly} />
-      <StepDrafts key={`drafts-${step.id}`} pipelineId={id} step={step} drafts={d.drafts} jobs={d.jobs} readOnly={readOnly} />
+      <StepDrafts
+        key={`drafts-${step.id}`}
+        pipelineId={id}
+        step={step}
+        drafts={d.drafts}
+        jobs={d.jobs}
+        readOnly={readOnly}
+        shared={d.shared}
+      />
       <History key={`history-${step.id}`} id={id} stepId={step.id} />
       {!readOnly && <RemoveStep key={`remove-${step.id}`} pipelineId={id} stepId={step.id} />}
     </main>

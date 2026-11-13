@@ -32,12 +32,14 @@ export function StepDrafts({
   drafts,
   jobs,
   readOnly,
+  shared = false,
 }: {
   pipelineId: number;
   step: PipelineStep;
   drafts: Draft[];
   jobs: DraftJob[];
   readOnly: boolean;
+  shared?: boolean; // the project has members: they all read the drafts made here
 }) {
   const t = useTranslations("pipelines");
   const format = useFormatter();
@@ -60,6 +62,7 @@ export function StepDrafts({
               <span className="text-xs opacity-60">
                 {format.dateTime(new Date(d.updated_at), { dateStyle: "medium", timeStyle: "short" })}
               </span>
+              {d.author && <span className="text-xs opacity-60">{t("drafts.by", { name: d.author })}</span>}
             </li>
           ))}
         </ul>
@@ -81,6 +84,7 @@ export function StepDrafts({
         <StepDraftDialog
           pipelineId={pipelineId}
           step={step}
+          shared={shared}
           onClose={() => setOpen(false)}
           onStarted={() => {
             setOpen(false);
@@ -95,11 +99,13 @@ export function StepDrafts({
 function StepDraftDialog({
   pipelineId,
   step,
+  shared,
   onClose,
   onStarted,
 }: {
   pipelineId: number;
   step: PipelineStep;
+  shared: boolean;
   onClose: () => void;
   onStarted: () => void;
 }) {
@@ -130,6 +136,7 @@ function StepDraftDialog({
   return (
     <DialogForm
       inputs={inputs.data}
+      shared={shared}
       busy={flight.busy}
       onClose={onClose}
       onStart={async (body) => {
@@ -156,11 +163,13 @@ type StartBody = Parameters<typeof docgenApi.startStepDraft>[1];
 
 function DialogForm({
   inputs,
+  shared,
   busy,
   onClose,
   onStart,
 }: {
   inputs: DraftInputs;
+  shared: boolean;
   busy: boolean;
   onClose: () => void;
   onStart: (body: StartBody) => Promise<string | null>;
@@ -185,6 +194,8 @@ function DialogForm({
   const aiEnabled = useMemo(() => new Map((boards.data ?? []).map((s) => [s.id, s.ai_enabled])), [boards.data]);
   const aiOff = sourcesNeedingAgreement(chosen.map((c) => c.source_id), [], aiEnabled);
   const missingAgree = aiOff.some((s) => !agreed.has(s));
+  // O22: a members-only board in a draft that every project member reads.
+  const sharesMembersOnly = shared && chosen.some((c) => byId.get(c.source_id)?.requires_login);
 
   const sending = inputs.files.filter((f) => ticked.has(f.document_id));
   const nothing = sending.length === 0 && chosen.length === 0;
@@ -269,6 +280,12 @@ function DialogForm({
           onChange={(e) => setRequest(e.target.value)}
         />
       </label>
+
+      {sharesMembersOnly && (
+        <p role="note" className="rounded bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/30 dark:text-amber-100">
+          {t("drafts.sharedMembersOnly")}
+        </p>
+      )}
 
       {/* The consent: the dialog names every own file that goes to the AI service. */}
       <p className="rounded bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/30 dark:text-amber-100">

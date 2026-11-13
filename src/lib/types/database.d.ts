@@ -677,6 +677,30 @@ export type Database = {
           },
         ]
       }
+      project_members: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          project_id: number
+          role: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          project_id: number
+          role: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          project_id?: number
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           created_at: string

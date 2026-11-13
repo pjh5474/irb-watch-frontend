@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api/client";
 import type { Draft, DraftJob, UploadFile } from "@/lib/api/docgen";
+import type { ProjectAccess } from "@/lib/api/projects";
 
 // A user's IRB pipelines (owner only): one per project and hospital, with steps, documents
 // (versioned by name) and a history. Served by the backend; the browser never reads the tables.
@@ -59,6 +60,7 @@ export type PipelineDetail = {
   steps: OverviewStep[];
   statuses: PipelineStatus[];
   step_types: { id: number; name: string; description: string }[];
+  access: ProjectAccess; // read = change nothing (a platform admin's support access)
 };
 
 /**
@@ -75,6 +77,8 @@ export type StepPage = {
   previous_step_id: number | null;
   next_step_id: number | null;
   statuses: PipelineStatus[];
+  access: ProjectAccess;
+  shared: boolean; // the project has members: a draft made here is read by all of them
 };
 
 export type PipelineEvent = {
@@ -84,6 +88,7 @@ export type PipelineEvent = {
   event_type: string;
   payload: Record<string, unknown>;
   created_at: string;
+  actor_name?: string | null; // who did it, when it was someone else
 };
 
 export type StepChange = Partial<{

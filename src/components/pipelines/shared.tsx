@@ -93,7 +93,7 @@ export function History({ id, stepId, stepNames }: { id: number; stepId?: number
               <span>{t.has(`event.${eventKey(e.event_type)}`) ? t(`event.${eventKey(e.event_type)}`) : e.event_type}</span>
               {e.step_id !== null && stepNames?.has(e.step_id) && <span className="opacity-70">· {stepNames.get(e.step_id)}</span>}
               {typeof e.payload.name === "string" && <span className="opacity-70">· {e.payload.name}</span>}
-              {!e.mine && <span className="opacity-60">· {t("byOther")}</span>}
+              {!e.mine && <span className="opacity-60">· {e.actor_name ? t("by", { name: e.actor_name }) : t("byOther")}</span>}
             </li>
           ))}
         </ol>

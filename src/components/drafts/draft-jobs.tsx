@@ -50,10 +50,13 @@ export function DraftJobLines({ jobs }: { jobs: DraftJob[] }) {
     <ul className="flex flex-col gap-1 text-sm">
       {jobs.map((job) => {
         const kind = t(job.kind === "revision" ? "jobs.revision" : "jobs.draft");
+        // A colleague's job in a shared project says whose it is.
+        const by = job.mine === false ? ` (${t("jobs.by", { name: job.started_by || t("jobs.someone") })})` : "";
         return isOpenJob(job) ? (
           <li key={job.id} role="status" className="flex items-center gap-2">
             <Spinner aria-hidden />
             {t(job.status === "queued" ? "jobs.queued" : "jobs.running", { kind })}
+            {by}
           </li>
         ) : (
           <li key={job.id} role="alert" className="text-red-600">
@@ -62,6 +65,7 @@ export function DraftJobLines({ jobs }: { jobs: DraftJob[] }) {
               time: format.dateTime(new Date(job.finished_at ?? job.created_at), { timeStyle: "short" }),
               reason: job.error ?? "",
             })}
+            {by}
           </li>
         );
       })}

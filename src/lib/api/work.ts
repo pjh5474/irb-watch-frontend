@@ -18,6 +18,7 @@ export type WorkStep = {
   days_left: number | null; // to the due date; negative = overdue
   required: number;
   required_missing: number;
+  mine?: boolean; // in a project the user owns
 };
 
 export type Work = {
@@ -30,5 +31,6 @@ export type Work = {
 };
 
 export const workApi = {
-  get: () => apiFetch<Work>("/work"),
+  /** mine: only projects the user owns (shared and organization projects left out). */
+  get: (mine = false) => apiFetch<Work>(`/work${mine ? "?mine=true" : ""}`),
 };

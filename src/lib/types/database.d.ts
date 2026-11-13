@@ -589,18 +589,21 @@ export type Database = {
         Row: {
           digest_enabled: boolean
           last_digest_at: string | null
+          step_reminders_enabled: boolean
           updated_at: string
           user_id: string
         }
         Insert: {
           digest_enabled?: boolean
           last_digest_at?: string | null
+          step_reminders_enabled?: boolean
           updated_at?: string
           user_id: string
         }
         Update: {
           digest_enabled?: boolean
           last_digest_at?: string | null
+          step_reminders_enabled?: boolean
           updated_at?: string
           user_id?: string
         }

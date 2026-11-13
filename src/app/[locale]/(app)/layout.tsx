@@ -38,6 +38,7 @@ export default async function AppLayout({
         <nav className="flex flex-1 gap-4 text-sm">
           <Link href="/">{t("feed")}</Link>
           <Link href="/projects">{t("projects")}</Link>
+          <Link href="/work">{t("work")}</Link>
           <Link href="/drafts">{t("drafts")}</Link>
           <Link href="/sources">{t("sources")}</Link>
           <Link href="/settings">{t("settings")}</Link>

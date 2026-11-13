@@ -43,16 +43,32 @@ afterEach(() => {
 describe("UnsubscribeForm", () => {
   it("opening the page changes nothing: no request is sent until the button is pressed", () => {
     show("tok.en");
-    expect(screen.getByText(/Stop the daily digest email/)).toBeTruthy();
+    expect(screen.getByText(/What should the daily email stop sending/)).toBeTruthy();
+    expect((screen.getByRole("checkbox", { name: /daily digest/ }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("checkbox", { name: "IRB step reminders" }) as HTMLInputElement).checked).toBe(true);
     expect(net.calls).toEqual([]);
   });
 
-  it("the button sends the token with POST and confirms", async () => {
+  it("the button sends the token and both parts with POST and confirms", async () => {
     show("a-b.c d");
     fireEvent.click(screen.getByRole("button", { name: "Stop the emails" }));
-    expect(await screen.findByText(/You will not get the daily digest any more/)).toBeTruthy();
-    expect(net.calls).toEqual([["https://api.test/unsubscribe?token=a-b.c%20d", "POST"]]); // encoded
+    expect(await screen.findByText(/daily digest or IRB step reminders any more/)).toBeTruthy();
+    expect(net.calls).toEqual([
+      ["https://api.test/unsubscribe?token=a-b.c%20d&stop=news&stop=reminders", "POST"], // encoded
+    ]);
     expect(screen.getByRole("link", { name: "Open Settings" }).getAttribute("href")).toBe("/settings");
+  });
+
+  it("stops one part only when the other is unticked, and needs at least one", async () => {
+    show("tok.en");
+    fireEvent.click(screen.getByRole("checkbox", { name: /daily digest/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "IRB step reminders" }));
+    expect((screen.getByRole("button", { name: "Stop the emails" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Tick at least one.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "IRB step reminders" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop the emails" }));
+    expect(await screen.findByText(/IRB step reminders any more; the daily digest stays on/)).toBeTruthy();
+    expect(net.calls).toEqual([["https://api.test/unsubscribe?token=tok.en&stop=reminders", "POST"]]);
   });
 
   it("a missing token is shown as an invalid link and sends nothing", () => {

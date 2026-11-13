@@ -8,25 +8,38 @@ import { Link } from "@/i18n/navigation";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 type State = "ask" | "done" | "invalid" | "error";
+type Part = "news" | "reminders";
 
-// The page behind the footer link of every digest mail. No login: the signed token in the
-// address is the proof. The button sends it to the API (POST), which turns this one user's
-// digest off. Opening the page changes nothing, so a link scanner cannot unsubscribe anyone.
+// The page behind the footer link of every daily mail. No login: the signed token in the
+// address is the proof. The user picks what to stop (the document news, the IRB step
+// reminders, or both; both are ticked at first) and the button sends that to the API (POST).
+// Opening the page changes nothing, so a link scanner cannot unsubscribe anyone. The one-click
+// button of mail apps posts without a choice, which stops both.
 export function UnsubscribeForm({ token }: { token: string | null }) {
   const t = useTranslations("unsubscribe");
   const [state, setState] = useState<State>(token ? "ask" : "invalid");
+  const [stop, setStop] = useState<Set<Part>>(new Set(["news", "reminders"]));
+  const [stopped, setStopped] = useState<Part[]>([]);
   const flight = useSingleFlight();
 
+  function toggle(part: Part, on: boolean) {
+    const next = new Set(stop);
+    if (on) next.add(part);
+    else next.delete(part);
+    setStop(next);
+  }
+
   async function submit() {
-    if (!token) return;
+    if (!token || stop.size === 0) return;
+    const parts = (["news", "reminders"] as const).filter((p) => stop.has(p));
+    const query = [`token=${encodeURIComponent(token)}`, ...parts.map((p) => `stop=${p}`)].join("&");
     await flight.run(async () => {
       try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/unsubscribe?token=${encodeURIComponent(token)}`,
-          { method: "POST" },
-        );
-        if (response.ok) setState("done");
-        else if (response.status === 400) setState("invalid");
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/unsubscribe?${query}`, { method: "POST" });
+        if (response.ok) {
+          setStopped(parts);
+          setState("done");
+        } else if (response.status === 400) setState("invalid");
         else setState("error");
       } catch {
         setState("error"); // no answer at all: the server or the network
@@ -40,18 +53,34 @@ export function UnsubscribeForm({ token }: { token: string | null }) {
       {state === "ask" && (
         <>
           <p className="text-sm">{t("question")}</p>
-          <div>
-            <Button onClick={submit} disabled={flight.busy} aria-busy={flight.busy}>
+          <fieldset className="flex flex-col gap-2 text-sm">
+            <legend className="sr-only">{t("choose")}</legend>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={stop.has("news")} onChange={(e) => toggle("news", e.target.checked)} />
+              {t("news")}
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={stop.has("reminders")}
+                onChange={(e) => toggle("reminders", e.target.checked)}
+              />
+              {t("reminders")}
+            </label>
+          </fieldset>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={submit} disabled={flight.busy || stop.size === 0} aria-busy={flight.busy}>
               {flight.busy && <Spinner aria-hidden />}
               {flight.busy ? t("working") : t("button")}
             </Button>
+            {stop.size === 0 && <span className="text-xs opacity-70">{t("chooseOne")}</span>}
           </div>
         </>
       )}
       {state === "done" && (
         <>
           <p role="status" className="text-sm">
-            {t("done")}
+            {stopped.length === 2 ? t("done") : stopped[0] === "news" ? t("doneNews") : t("doneReminders")}
           </p>
           <Link href="/settings" className="text-sm underline-offset-4 hover:underline">
             {t("settingsLink")}

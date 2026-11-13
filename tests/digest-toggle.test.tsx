@@ -70,6 +70,22 @@ describe("DigestToggle", () => {
     expect(box().checked).toBe(false);
   });
 
+  it("the reminders switch changes only step_reminders_enabled", async () => {
+    db.updateRows = [];
+    render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <DigestToggle userId="u-1" initial={true} part="reminders" />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("Email me IRB step reminders")).toBeTruthy();
+    fireEvent.click(box());
+    expect(await screen.findByText("IRB step reminders are off.")).toBeTruthy();
+    expect(db.calls).toEqual([
+      'notification_prefs update {"step_reminders_enabled":false} where user_id=u-1',
+      'notification_prefs insert {"user_id":"u-1","step_reminders_enabled":false}',
+    ]);
+  });
+
   it("a user without a row gets one created (update finds nothing, then insert)", async () => {
     db.updateRows = [];
     show(true);

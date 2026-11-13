@@ -12,9 +12,13 @@ export default async function SettingsPage({ params }: { params: Promise<{ local
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
 
-  // Under row-level security this is only the user's own row. No row = the digest is on.
+  // Under row-level security this is only the user's own row. No row = both are on.
   const { data: prefs, error } = userId
-    ? await supabase.from("notification_prefs").select("digest_enabled").eq("user_id", userId).maybeSingle()
+    ? await supabase
+        .from("notification_prefs")
+        .select("digest_enabled, step_reminders_enabled")
+        .eq("user_id", userId)
+        .maybeSingle()
     : { data: null, error: new Error("not signed in") };
 
   return (
@@ -30,6 +34,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ local
         ) : (
           <>
             <DigestToggle userId={userId} initial={prefs?.digest_enabled ?? true} />
+            <DigestToggle userId={userId} part="reminders" initial={prefs?.step_reminders_enabled ?? true} />
             <p className="text-xs opacity-70">{t("studiesNote")}</p>
           </>
         )}

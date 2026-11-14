@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { adminApi } from "@/lib/api/admin";
 import { docgenApi } from "@/lib/api/docgen";
+import { docgenEnabled } from "@/lib/features";
 import {
   MAX_INSTRUCTIONS,
   type StepStatus,
@@ -275,7 +276,7 @@ function StepTypes() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{type.name}</span>
               {type.archived_at && <Badge>{t("pipeline.archived")}</Badge>}
-              {type.instructions && <Badge tone="good">{t("pipeline.hasInstructions")}</Badge>}
+              {type.instructions && docgenEnabled() && <Badge tone="good">{t("pipeline.hasInstructions")}</Badge>}
               {type.required_documents.length > 0 && (
                 <span className="opacity-70">{t("pipeline.requiredCount", { n: type.required_documents.length })}</span>
               )}
@@ -318,8 +319,11 @@ function StepTypeEditor({
   onCancel: () => void;
 }) {
   const t = useTranslations("admin");
-  const guides = useQuery({ queryKey: [...PIPELINE_KEY, "guides"], queryFn: () => docgenApi.guides(false) });
-  const forms = useQuery({ queryKey: [...PIPELINE_KEY, "forms"], queryFn: () => docgenApi.adminTemplates(false) });
+  // The AI fields (instructions, guides, form, inputs) serve only the docs generator. With it
+  // switched off they are hidden, not cleared: a save sends the stored values back unchanged.
+  const ai = docgenEnabled();
+  const guides = useQuery({ queryKey: [...PIPELINE_KEY, "guides"], queryFn: () => docgenApi.guides(false), enabled: ai });
+  const forms = useQuery({ queryKey: [...PIPELINE_KEY, "forms"], queryFn: () => docgenApi.adminTemplates(false), enabled: ai });
   const readyForms = (forms.data ?? []).filter((f) => f.status === "ready");
   const [value, setValue] = useState<StepTypeInput>({
     name: initial.name,
@@ -359,6 +363,8 @@ function StepTypeEditor({
         {t("pipeline.description")}
         <textarea className="rounded border px-2 py-1.5" rows={2} maxLength={1000} value={value.description} onChange={(e) => set({ description: e.target.value })} />
       </label>
+      {ai && (
+      <>
       <div className="flex flex-col gap-1">
         <label htmlFor={`${prefix}-instructions`}>{t("pipeline.instructions")}</label>
         <textarea
@@ -415,6 +421,8 @@ function StepTypeEditor({
           {t("pipeline.inputBoard")}
         </label>
       </fieldset>
+      </>
+      )}
       <div className="flex flex-col gap-1">
         <label htmlFor={`${prefix}-docs`}>{t("pipeline.requiredDocs")}</label>
         <textarea

@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
+import { docgenEnabled } from "@/lib/features";
 
 // The admin area's parts. The page you are on is marked with aria-current.
 export function AdminTabs() {
@@ -11,8 +12,13 @@ export function AdminTabs() {
     { href: "/admin/sources", label: t("tabs.sources"), active: pathname.startsWith("/admin/sources") },
     { href: "/admin/hospitals", label: t("tabs.hospitals"), active: pathname.startsWith("/admin/hospitals") },
     { href: "/admin/reviews", label: t("tabs.reviews"), active: pathname.startsWith("/admin/reviews") },
-    { href: "/admin/guides", label: t("tabs.guides"), active: pathname.startsWith("/admin/guides") },
-    { href: "/admin/templates", label: t("tabs.templates"), active: pathname.startsWith("/admin/templates") },
+    // Guides and forms serve only the docs generator (hidden unless switched on, lib/features).
+    ...(docgenEnabled()
+      ? [
+          { href: "/admin/guides", label: t("tabs.guides"), active: pathname.startsWith("/admin/guides") },
+          { href: "/admin/templates", label: t("tabs.templates"), active: pathname.startsWith("/admin/templates") },
+        ]
+      : []),
     { href: "/admin/pipeline", label: t("tabs.pipeline"), active: pathname.startsWith("/admin/pipeline") },
     { href: "/admin/ai", label: t("tabs.ai"), active: pathname.startsWith("/admin/ai") },
     { href: "/admin/assistant", label: t("tabs.assistant"), active: pathname.startsWith("/admin/assistant") },

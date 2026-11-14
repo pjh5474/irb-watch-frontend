@@ -10,6 +10,7 @@ import { StepDrafts } from "@/components/pipelines/step-drafts";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { JOB_POLL_MS, isOpenJob } from "@/lib/api/docgen";
+import { docgenEnabled } from "@/lib/features";
 import { pipelineApi } from "@/lib/api/pipelines";
 import { siteLabel } from "@/lib/api/sites";
 
@@ -103,15 +104,17 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
 
       <StepHeader key={`header-${step.id}`} pipelineId={id} step={step} statuses={d.statuses} readOnly={readOnly} />
       <StepDocuments pipelineId={id} page={d} readOnly={readOnly} />
-      <StepDrafts
-        key={`drafts-${step.id}`}
-        pipelineId={id}
-        step={step}
-        drafts={d.drafts}
-        jobs={d.jobs}
-        readOnly={readOnly}
-        shared={d.shared}
-      />
+      {docgenEnabled() && (
+        <StepDrafts
+          key={`drafts-${step.id}`}
+          pipelineId={id}
+          step={step}
+          drafts={d.drafts}
+          jobs={d.jobs}
+          readOnly={readOnly}
+          shared={d.shared}
+        />
+      )}
       <History key={`history-${step.id}`} id={id} stepId={step.id} />
       {!readOnly && <RemoveStep key={`remove-${step.id}`} pipelineId={id} stepId={step.id} />}
     </main>

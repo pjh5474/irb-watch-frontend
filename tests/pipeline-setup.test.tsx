@@ -24,6 +24,7 @@ const TYPE = (id: number, name: string): StepType => ({
 const state = vi.hoisted(() => ({
   calls: [] as unknown[],
   archiveError: null as unknown,
+  types: [] as unknown[],
 }));
 
 vi.mock("@/lib/supabase/client", () => ({
@@ -69,7 +70,7 @@ vi.mock("@/lib/api/pipeline", async () => {
       reorderStatuses: async (keys: string[]) => state.calls.push(["reorder", keys]),
       archiveStatus: async (key: string) => state.calls.push(["archiveStatus", key]),
       restoreStatus: async () => {},
-      stepTypes: async () => [TYPE(1, "Initial review"), TYPE(2, "Amendment"), TYPE(3, "Closure")],
+      stepTypes: async () => state.types,
       createStepType: async (body: unknown) => state.calls.push(["create", body]),
       updateStepType: async (id: number, body: unknown) => state.calls.push(["update", id, body]),
       archiveStepType: async (id: number) => {
@@ -101,9 +102,13 @@ const section = async (name: string) =>
 beforeEach(() => {
   state.calls = [];
   state.archiveError = null;
+  state.types = [TYPE(1, "Initial review"), TYPE(2, "Amendment"), TYPE(3, "Closure")];
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 describe("helpers", () => {
   it("moves items and parses required documents", () => {
@@ -165,6 +170,47 @@ describe("PipelineSetup", () => {
           input_earlier_steps: true,
           input_board_documents: true,
           required_documents: ["CIOMS", "Letter"],
+        },
+      ],
+    ]);
+  });
+
+  it("with the docs generator off, hides the AI fields and saves their stored values unchanged", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DOCGEN_ENABLED", "false");
+    state.types = [
+      {
+        ...TYPE(2, "Amendment"),
+        instructions: "Stored rules.",
+        guide_ids: [10],
+        form_template_id: 20,
+        input_board_documents: true,
+        required_documents: ["Protocol"],
+      },
+    ];
+    wrap();
+    const types = await section("Step types");
+    await within(types).findByText("Amendment");
+    expect(within(types).queryByText("AI instructions")).toBeNull(); // the badge
+    fireEvent.click(within(types).getByRole("button", { name: "Edit" }));
+    expect(within(types).queryByLabelText("AI instructions for this step")).toBeNull();
+    expect(within(types).queryByLabelText("Default form")).toBeNull();
+    expect(within(types).queryByLabelText("SNUH guide")).toBeNull();
+    fireEvent.change(within(types).getByLabelText("Name"), { target: { value: "Amendment review" } });
+    fireEvent.click(within(types).getByRole("button", { name: "Save" }));
+    await within(types).findByText("Saved.");
+    expect(state.calls).toEqual([
+      [
+        "update",
+        2,
+        {
+          name: "Amendment review",
+          description: "",
+          instructions: "Stored rules.",
+          guide_ids: [10],
+          form_template_id: 20,
+          input_earlier_steps: true,
+          input_board_documents: true,
+          required_documents: ["Protocol"],
         },
       ],
     ]);

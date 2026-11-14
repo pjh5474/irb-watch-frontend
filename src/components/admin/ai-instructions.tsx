@@ -19,6 +19,7 @@ import {
   type InstructionVersion,
   type TestResult,
 } from "@/lib/api/ai";
+import { docgenEnabled } from "@/lib/features";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 export const AI_KEY = ["admin", "ai-instructions"] as const;
@@ -43,7 +44,7 @@ export function AiInstructions() {
         </p>
       )}
       {query.data &&
-        FEATURES.map((f) => (
+        FEATURES.filter((f) => f !== "docgen" || docgenEnabled()).map((f) => (
           <FeatureCard
             key={f}
             feature={f}

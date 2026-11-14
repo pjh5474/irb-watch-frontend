@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
 import { adminApi, isRbaySite, loginSite, type AdminSource } from "@/lib/api/admin";
+import { docgenEnabled } from "@/lib/features";
 import { isManual } from "@/lib/source-health";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
@@ -49,7 +50,7 @@ export function AdminSource({ id }: { id: number }) {
   const source = query.data?.find((s) => s.id === id);
   const hospitals = useQuery({ queryKey: HOSPITALS_KEY, queryFn: adminApi.hospitals });
   const hospital = hospitals.data?.hospitals.find((h) => h.id === source?.hospital_id);
-  const guides = hospital ? <HospitalGuides hospitalId={hospital.id} hospitalName={hospital.name} /> : null;
+  const guides = hospital && docgenEnabled() ? <HospitalGuides hospitalId={hospital.id} hospitalName={hospital.name} /> : null;
   const placement = source && (
     <p className="text-sm">
       {hospital

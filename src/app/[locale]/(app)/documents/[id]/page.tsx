@@ -8,6 +8,7 @@ import { SummaryPanel } from "@/components/summary-panel";
 import { Link } from "@/i18n/navigation";
 import { getAccessState } from "@/lib/access";
 import { wordDiff } from "@/lib/diff";
+import { docgenEnabled } from "@/lib/features";
 import { formatPageText } from "@/lib/page-text";
 import { createClient } from "@/lib/supabase/server";
 
@@ -110,12 +111,14 @@ export default async function DocumentPage({
             <span>{t("uploadedByHand")}</span>
           )}
           {/* Pin a version only when an older one is open; otherwise the draft uses the newest. */}
-          <Link
-            href={`/drafts/new?document=${documentId}${index > 0 ? `&v=${selected.version_no}` : ""}`}
-            className="underline"
-          >
-            {t("draftFromThis")}
-          </Link>
+          {docgenEnabled() && (
+            <Link
+              href={`/drafts/new?document=${documentId}${index > 0 ? `&v=${selected.version_no}` : ""}`}
+              className="underline"
+            >
+              {t("draftFromThis")}
+            </Link>
+          )}
         </div>
         {document.status === "needs_review" && document.review_reason && (
           <div className="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">

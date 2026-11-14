@@ -11,6 +11,7 @@ import { siteLabel } from "@/lib/api/sites";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
+import { docgenEnabled } from "@/lib/features";
 import { type OverviewStep, type PipelineDetail, type PipelineStatus, daysUntil, pipelineApi, todaySeoul } from "@/lib/api/pipelines";
 
 /**
@@ -206,7 +207,7 @@ function StepRow({
             {t("requiredCount", { done: step.required - step.required_missing, total: step.required })}
           </span>
         )}
-        {step.drafts > 0 && <span>{t("draftCount", { n: step.drafts })}</span>}
+        {step.drafts > 0 && docgenEnabled() && <span>{t("draftCount", { n: step.drafts })}</span>}
         {step.open_jobs > 0 && (
           <span className="flex items-center gap-1" role="status">
             <Spinner aria-hidden />

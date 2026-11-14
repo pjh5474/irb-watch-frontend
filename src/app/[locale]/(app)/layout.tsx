@@ -5,6 +5,7 @@ import { LocaleSwitch, SignOutButton } from "@/components/header-controls";
 import { NavProgress } from "@/components/nav-progress";
 import { ServerStatus } from "@/components/server-status";
 import { Link, redirect } from "@/i18n/navigation";
+import { docgenEnabled } from "@/lib/features";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({
@@ -39,7 +40,7 @@ export default async function AppLayout({
           <Link href="/">{t("feed")}</Link>
           <Link href="/projects">{t("projects")}</Link>
           <Link href="/work">{t("work")}</Link>
-          <Link href="/drafts">{t("drafts")}</Link>
+          {docgenEnabled() && <Link href="/drafts">{t("drafts")}</Link>}
           <Link href="/sources">{t("sources")}</Link>
           <Link href="/settings">{t("settings")}</Link>
           {isAdmin && <Link href="/admin">{t("admin")}</Link>}

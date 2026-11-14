@@ -95,6 +95,26 @@ describe("WorkView", () => {
     expect((screen.getByRole("alert")).textContent).toContain("the AI timed out"); // a failure shows its reason
   });
 
+  it("with the docs generator off, leaves the AI drafts list out", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DOCGEN_ENABLED", "false");
+    state.work = {
+      ...EMPTY,
+      drafts: [
+        {
+          job: {
+            id: "j1", kind: "draft", status: "failed", error: "the AI timed out", draft_id: null,
+            pipeline_step_id: 5, created_at: "2026-11-20T01:00:00Z", finished_at: "2026-11-20T01:02:00Z",
+          },
+          step: step(5),
+        },
+      ],
+    } satisfies Work;
+    show();
+    expect(await screen.findByText(/Nothing to do right now/)).toBeTruthy(); // drafts alone are not work
+    expect(screen.queryByRole("heading", { name: "AI drafts" })).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
   it("says so when there is nothing to do", async () => {
     show();
     expect(await screen.findByText(/Nothing to do right now/)).toBeTruthy();

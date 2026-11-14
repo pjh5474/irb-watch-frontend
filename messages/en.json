@@ -27,6 +27,7 @@
     "language": "한국어"
   },
   "drafts": {
+    "off": "Document writing is turned off in IRB Watch. It will return as a separate document assistant.",
     "title": "Drafts",
     "intro": "Drafts of IRB submission and amendment forms, written by the AI from stored documents and each hospital's guide. Check every draft before you use it. Drafts are deleted 30 days after the last change.",
     "new": "New draft",

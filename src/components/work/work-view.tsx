@@ -8,6 +8,7 @@ import { errorText } from "@/components/pipelines/shared";
 import { DueBadge } from "@/components/pipelines/step/step-header";
 import { Link } from "@/i18n/navigation";
 import { type WorkStep, workApi } from "@/lib/api/work";
+import { docgenEnabled } from "@/lib/features";
 
 /**
  * "My IRB work": what needs doing over all the user's projects. Four lists, each line opens its
@@ -30,7 +31,9 @@ export function WorkView() {
       </main>
     );
   const w = work.data;
-  const empty = !w.due.length && !w.waiting.length && !w.missing.length && !w.drafts.length;
+  // AI drafts are listed only while the docs generator is switched on (lib/features).
+  const drafts = docgenEnabled() ? w.drafts : [];
+  const empty = !w.due.length && !w.waiting.length && !w.missing.length && !drafts.length;
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
@@ -60,11 +63,11 @@ export function WorkView() {
         )}
       />
 
-      {w.drafts.length > 0 && (
+      {drafts.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="font-medium">{t("drafts")}</h2>
           <ul className="flex flex-col gap-2">
-            {w.drafts.map(({ job, step }) => (
+            {drafts.map(({ job, step }) => (
               <li key={job.id} className="flex flex-col gap-1 rounded border p-3 text-sm">
                 <StepLink step={step} />
                 <DraftJobLines jobs={[job]} />

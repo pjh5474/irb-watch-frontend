@@ -2,38 +2,79 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Note, useChange } from "@/components/pipelines/shared";
-import { type PipelineStatus, type PipelineStep, type StepChange, daysUntil, pipelineApi, todaySeoul } from "@/lib/api/pipelines";
+import {
+  type PipelineStatus,
+  type PipelineStep,
+  type StepChange,
+  type StepResult,
+  daysUntil,
+  pipelineApi,
+  stepLabel,
+  todaySeoul,
+} from "@/lib/api/pipelines";
 
-/** Name, type, status, dates and note of one step; read-only when the step or pipeline is removed. */
+/**
+ * Name, number, subject, type, status, IRB result, dates and note of one step; read-only when
+ * the step or pipeline is removed. After a result the page offers a matching status (owner:
+ * offered, never set by itself).
+ */
 export function StepHeader({
   pipelineId,
   step,
   statuses,
   readOnly,
+  results = [],
+  suggestedStatus = null,
 }: {
   pipelineId: number;
   step: PipelineStep;
   statuses: PipelineStatus[];
   readOnly: boolean;
+  results?: StepResult[];
+  suggestedStatus?: string | null;
 }) {
   const t = useTranslations("pipelines");
   const change = useChange();
   const [note, setNote] = useState(step.note);
   const [name, setName] = useState(step.name);
+  const [subject, setSubject] = useState(step.subject ?? "");
+  const [number, setNumber] = useState(step.sequence_no ? String(step.sequence_no) : "");
   const status = statuses.find((s) => s.key === step.status_key);
   const choices = statuses.filter((s) => !s.archived || s.key === step.status_key);
+  const resultChoices = results.filter((r) => !r.archived || r.key === step.result_key);
+  const suggested = suggestedStatus ? statuses.find((s) => s.key === suggestedStatus) : undefined;
   const due = step.due_on && !status?.closed ? daysUntil(step.due_on, todaySeoul()) : null;
   const update = (c: StepChange) => change.run(() => pipelineApi.updateStep(pipelineId, step.id, c), null);
+  const saveNumber = () => {
+    const value = number.trim() === "" ? null : Number(number);
+    if (value !== null && !(Number.isInteger(value) && value >= 1 && value <= 999))
+      return change.setMessage({ kind: "error", text: t("numberRange") });
+    if (value !== (step.sequence_no ?? null)) void update({ sequence_no: value });
+  };
 
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {readOnly ? (
-          <h1 className="text-2xl font-semibold">{step.name}</h1>
+          <h1 className="text-2xl font-semibold">{stepLabel(step)}</h1>
         ) : (
           <>
-            <h1 className="sr-only">{step.name}</h1>
+            <h1 className="sr-only">{stepLabel(step)}</h1>
+            <label className="flex items-center gap-1 text-sm">
+              <span className="sr-only">{t("stepNumber")}</span>
+              <input
+                aria-label={t("stepNumber")}
+                inputMode="numeric"
+                className="w-14 rounded border px-2 py-1 text-right text-xl font-semibold"
+                value={number}
+                placeholder="–"
+                onChange={(e) => setNumber(e.target.value.replace(/[^0-9]/g, ""))}
+                onBlur={saveNumber}
+              />
+              <span className="text-xl font-semibold">{t("round")}</span>
+            </label>
             <label className="sr-only" htmlFor="step-name">
               {t("stepName")}
             </label>
@@ -51,6 +92,45 @@ export function StepHeader({
           <span className="text-xs opacity-60">{step.step_type_name}</span>
         )}
         <DueBadge due={due} />
+      </div>
+
+      <label className="flex flex-col gap-1 text-sm">
+        {t("subject")}
+        <input
+          className="rounded border px-2 py-1"
+          disabled={readOnly}
+          value={subject}
+          maxLength={200}
+          placeholder={t("subjectHint")}
+          onChange={(e) => setSubject(e.target.value)}
+          onBlur={() => subject.trim() !== (step.subject ?? "") && update({ subject: subject.trim() })}
+        />
+      </label>
+
+      <div className="grid gap-2 text-sm sm:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          {t("result")}
+          <select
+            className="rounded border px-2 py-1"
+            disabled={readOnly || change.busy}
+            value={step.result_key ?? ""}
+            onChange={(e) => update({ result_key: e.target.value || null })}
+          >
+            <option value="">{t("noResult")}</option>
+            {resultChoices.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {!readOnly && suggested && (
+          <div className="flex items-end">
+            <Button size="sm" variant="outline" disabled={change.busy} onClick={() => update({ status_key: suggested.key })}>
+              {t("setStatusTo", { status: suggested.label })}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-2 text-sm sm:grid-cols-4">

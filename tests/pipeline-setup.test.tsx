@@ -19,6 +19,8 @@ const TYPE = (id: number, name: string): StepType => ({
   required_documents: [],
   archived_at: null,
   updated_at: "",
+  category: "other",
+  numbered: false,
 });
 
 const state = vi.hoisted(() => ({
@@ -78,6 +80,15 @@ vi.mock("@/lib/api/pipeline", async () => {
         state.calls.push(["archiveType", id]);
       },
       restoreStepType: async () => {},
+      results: async () => [
+        { key: "approved", label: "Approved", approved: true, needs_answer: false, position: 1, archived_at: null },
+        { key: "revision", label: "Revision", approved: false, needs_answer: true, position: 2, archived_at: null },
+      ],
+      addResult: async (body: unknown) => state.calls.push(["addResult", body]),
+      updateResult: async (key: string, body: unknown) => state.calls.push(["updateResult", key, body]),
+      reorderResults: async (keys: string[]) => state.calls.push(["reorderResults", keys]),
+      archiveResult: async (key: string) => state.calls.push(["archiveResult", key]),
+      restoreResult: async () => {},
       templates: async () => [{ hospital_id: null, step_type_ids: [1, 3], updated_at: "x" }],
       saveTemplate: async (hospitalId: number | null, ids: number[]) => state.calls.push(["saveTemplate", hospitalId, ids]),
       deleteTemplate: async () => {},
@@ -170,9 +181,54 @@ describe("PipelineSetup", () => {
           input_earlier_steps: true,
           input_board_documents: true,
           required_documents: ["CIOMS", "Letter"],
+          category: "other",
+          numbered: false,
         },
       ],
     ]);
+  });
+
+  it("sets a step type's category and numbering; follow-up types stay out of the order picker", async () => {
+    state.types = [...state.types, { ...TYPE(7, "Answer"), category: "follow_up", numbered: true }];
+    wrap();
+    const order = await section("Default step order");
+    await within(order).findByText("Initial review");
+    const picker = within(order).getByLabelText("Add a step…") as HTMLSelectElement;
+    expect([...picker.options].map((o) => o.textContent)).not.toContain("Answer");
+    const types = await section("Step types");
+    expect(within(types).getByText("Follow-up")).toBeTruthy();
+    fireEvent.click(within(types).getAllByRole("button", { name: "Edit" })[1]); // Amendment
+    fireEvent.change(within(types).getByLabelText("Category"), { target: { value: "amendment" } });
+    fireEvent.click(within(types).getByLabelText("Numbered in rounds (1차, 2차, ...)"));
+    fireEvent.click(within(types).getByRole("button", { name: "Save" }));
+    await within(types).findByText("Saved.");
+    expect(state.calls[0]).toEqual([
+      "update", 2,
+      expect.objectContaining({ name: "Amendment", category: "amendment", numbered: true }),
+    ]);
+  });
+
+  it("edits the IRB results list", async () => {
+    wrap();
+    const results = await section("IRB results");
+    await within(results).findByDisplayValue("Approved");
+    expect(within(results).getByText("Needs an answer", { selector: "span" })).toBeTruthy();
+    fireEvent.change(within(results).getByLabelText("New result"), { target: { value: " Deferred " } });
+    fireEvent.click(within(results).getByRole("button", { name: "Add" }));
+    const add = within(results).getByRole("button", { name: "Add" }) as HTMLButtonElement;
+    const idle = () => vi.waitFor(() => expect(add.disabled).toBe(false)); // one change at a time
+    await vi.waitFor(() =>
+      expect(state.calls).toContainEqual(["addResult", { label: "Deferred", approved: false, needs_answer: false }]),
+    );
+    await idle();
+    fireEvent.click(within(results).getAllByRole("button", { name: "Not approved" })[0]);
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["updateResult", "approved", { approved: false }]));
+    await idle();
+    fireEvent.click(within(results).getByRole("button", { name: "Move Approved down" }));
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["reorderResults", ["revision", "approved"]]));
+    await idle();
+    fireEvent.click(within(results).getAllByRole("button", { name: "Archive" })[1]);
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["archiveResult", "revision"]));
   });
 
   it("with the docs generator off, hides the AI fields and saves their stored values unchanged", async () => {
@@ -211,6 +267,8 @@ describe("PipelineSetup", () => {
           input_earlier_steps: true,
           input_board_documents: true,
           required_documents: ["Protocol"],
+          category: "other",
+          numbered: false,
         },
       ],
     ]);

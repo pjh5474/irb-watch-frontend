@@ -12,7 +12,16 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Link } from "@/i18n/navigation";
 import { docgenEnabled } from "@/lib/features";
-import { type OverviewStep, type PipelineDetail, type PipelineStatus, daysUntil, pipelineApi, todaySeoul } from "@/lib/api/pipelines";
+import {
+  type OverviewStep,
+  type PipelineDetail,
+  type PipelineStatus,
+  type StepResult,
+  daysUntil,
+  pipelineApi,
+  stepLabel,
+  todaySeoul,
+} from "@/lib/api/pipelines";
 
 /**
  * The pipeline overview (phase A): one row per step with its status, dates and counts; each
@@ -41,6 +50,13 @@ export function PipelineView({ id }: { id: number }) {
   const readOnly = removed || viewOnly;
   const live = d.steps.filter((s) => s.deleted_at === null);
   const gone = d.steps.filter((s) => s.deleted_at !== null);
+  // Phase B2b: the server sends each main step followed by its follow-ups. Main steps are
+  // numbered and moved; follow-ups are indented as 02-1, 02-2 and move with their main step.
+  const groups = stepGroups(live);
+  const mainOrder = groups.map((g) => g.main.id);
+  const fullOrder = (mains: number[]) =>
+    mains.flatMap((m) => [m, ...(groups.find((g) => g.main.id === m)?.answers.map((a) => a.id) ?? [])]);
+  const results = d.results ?? [];
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
@@ -68,12 +84,24 @@ export function PipelineView({ id }: { id: number }) {
 
       {live.length === 0 && <p className="text-sm opacity-70">{t("noSteps")}</p>}
       <ol className="flex flex-col gap-2">
-        {live.map((step, i) => (
-          <StepRow key={step.id} pipelineId={id} step={step} statuses={d.statuses} index={i} order={live.map((s) => s.id)} readOnly={readOnly} />
+        {groups.map((g, i) => (
+          <li key={g.main.id} className="flex flex-col gap-2">
+            <StepRow
+              pipelineId={id} step={g.main} statuses={d.statuses} results={results} number={pad(i + 1)}
+              move={readOnly ? null : { index: i, count: groups.length, save: (to) => pipelineApi.reorder(id, fullOrder(moved(mainOrder, i, to))) }}
+            />
+            {g.answers.length > 0 && (
+              <ol className="ml-8 flex flex-col gap-2" aria-label={t("followUpsOf", { name: stepLabel(g.main) })}>
+                {g.answers.map((a, j) => (
+                  <StepRow key={a.id} pipelineId={id} step={a} statuses={d.statuses} results={results} number={`${pad(i + 1)}-${j + 1}`} move={null} />
+                ))}
+              </ol>
+            )}
+          </li>
         ))}
       </ol>
 
-      {!readOnly && <AddStep pipelineId={id} types={d.step_types} />}
+      {!readOnly && <AddStep pipelineId={id} types={d.step_types.filter((x) => x.category !== "follow_up")} />}
 
       {gone.length > 0 && (
         <section className="flex flex-col gap-2 text-sm">
@@ -86,7 +114,7 @@ export function PipelineView({ id }: { id: number }) {
               {gone.map((s) => (
                 <li key={s.id} className="flex items-center gap-2">
                   <Link href={`/pipelines/${id}/steps/${s.id}`} className="flex-1 opacity-70 underline-offset-4 hover:underline">
-                    {s.name}
+                    {stepLabel(s)}
                   </Link>
                   {!readOnly && (
                     <Button size="sm" variant="outline" disabled={change.busy} onClick={() => change.run(() => pipelineApi.restoreStep(id, s.id), t("restored"))}>
@@ -104,12 +132,12 @@ export function PipelineView({ id }: { id: number }) {
         <details className="rounded border p-4">
           <summary className="cursor-pointer text-sm font-medium">{t("siteDetails")}</summary>
           <div className="mt-3">
-            <SiteDetails siteId={p.site_id} readOnly={readOnly} steps={live.map((s) => ({ id: s.id, name: s.name }))} />
+            <SiteDetails siteId={p.site_id} readOnly={readOnly} steps={live.map((s) => ({ id: s.id, name: stepLabel(s) }))} />
           </div>
         </details>
       )}
 
-      <History id={id} stepNames={new Map(d.steps.map((s) => [s.id, s.name]))} />
+      <History id={id} stepNames={new Map(d.steps.map((s) => [s.id, stepLabel(s)]))} />
 
       {!readOnly && <RemovePipeline id={id} />}
     </main>
@@ -142,53 +170,68 @@ function RemovePipeline({ id }: { id: number }) {
   );
 }
 
-/** One step: number, name (opens the step page), status, dates and counts; move up or down. */
+/** Live steps grouped as the overview shows them: each main step with its follow-ups. A
+ * follow-up whose main step is not live is shown as a main step. */
+export function stepGroups<T extends { id: number; parent_step_id?: number | null }>(live: T[]): { main: T; answers: T[] }[] {
+  const ids = new Set(live.map((s) => s.id));
+  const isMain = (s: T) => !s.parent_step_id || !ids.has(s.parent_step_id);
+  return live.filter(isMain).map((main) => ({ main, answers: live.filter((s) => !isMain(s) && s.parent_step_id === main.id) }));
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function moved(ids: number[], from: number, to: number): number[] {
+  const out = [...ids];
+  [out[from], out[to]] = [out[to], out[from]];
+  return out;
+}
+
+/** One step: number, label (opens the step page), subject, status, IRB result, dates and
+ * counts; a main step moves up or down (with its follow-ups). */
 function StepRow({
   pipelineId,
   step,
   statuses,
-  index,
-  order,
-  readOnly,
+  results,
+  number,
+  move,
 }: {
   pipelineId: number;
   step: OverviewStep;
   statuses: PipelineStatus[];
-  index: number;
-  order: number[];
-  readOnly: boolean;
+  results: StepResult[];
+  number: string;
+  move: { index: number; count: number; save: (to: number) => Promise<unknown> } | null;
 }) {
   const t = useTranslations("pipelines");
   const change = useChange();
   const status = statuses.find((s) => s.key === step.status_key);
+  const result = results.find((r) => r.key === step.result_key);
   const due = step.due_on && !status?.closed ? daysUntil(step.due_on, todaySeoul()) : null;
-  const move = (by: -1 | 1) => {
-    const ids = [...order];
-    const to = index + by;
-    [ids[index], ids[to]] = [ids[to], ids[index]];
-    return change.run(() => pipelineApi.reorder(pipelineId, ids), null);
-  };
+  const label = stepLabel(step);
   const dates = (["submitted_on", "decided_on"] as const).filter((k) => step[k]);
 
   return (
-    <li className="flex flex-col gap-1 rounded border p-3 text-sm">
+    <div className="flex flex-col gap-1 rounded border p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="tabular-nums opacity-60">{index + 1}.</span>
+        <span className="tabular-nums opacity-60">{number}</span>
         <Link href={`/pipelines/${pipelineId}/steps/${step.id}`} className="font-medium underline-offset-4 hover:underline">
-          {step.name}
+          {label}
         </Link>
+        {step.subject && <span className="text-xs opacity-80">({step.subject})</span>}
         {step.step_type_name && step.step_type_name !== step.name && (
           <span className="text-xs opacity-60">{step.step_type_name}</span>
         )}
         <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs dark:bg-neutral-800">{status?.label ?? step.status_key}</span>
         {status?.closed && <Check className="size-4 text-green-700" aria-label={t("finished")} />}
+        {result && <ResultBadge result={result} />}
         <DueBadge due={due} />
-        {!readOnly && (
+        {move && (
           <span className="ml-auto flex gap-1">
-            <Button size="sm" variant="outline" disabled={change.busy || index === 0} onClick={() => move(-1)} aria-label={t("up", { name: step.name })}>
+            <Button size="sm" variant="outline" disabled={change.busy || move.index === 0} onClick={() => change.run(() => move.save(move.index - 1), null)} aria-label={t("up", { name: label })}>
               <ArrowUp className="size-4" aria-hidden />
             </Button>
-            <Button size="sm" variant="outline" disabled={change.busy || index === order.length - 1} onClick={() => move(1)} aria-label={t("down", { name: step.name })}>
+            <Button size="sm" variant="outline" disabled={change.busy || move.index === move.count - 1} onClick={() => change.run(() => move.save(move.index + 1), null)} aria-label={t("down", { name: label })}>
               <ArrowDown className="size-4" aria-hidden />
             </Button>
           </span>
@@ -216,8 +259,18 @@ function StepRow({
         )}
       </div>
       <Note message={change.message} />
-    </li>
+    </div>
   );
+}
+
+/** The IRB's answer: green for an approved result, amber for one that needs an answer. */
+export function ResultBadge({ result }: { result: StepResult }) {
+  const tone = result.needs_answer
+    ? "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+    : result.approved
+      ? "bg-green-100 text-green-900 dark:bg-green-900/40 dark:text-green-200"
+      : "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-200";
+  return <span className={`rounded px-2 py-0.5 text-xs ${tone}`}>{result.label}</span>;
 }
 
 function AddStep({ pipelineId, types }: { pipelineId: number; types: PipelineDetail["step_types"] }) {
@@ -225,17 +278,24 @@ function AddStep({ pipelineId, types }: { pipelineId: number; types: PipelineDet
   const change = useChange();
   const [type, setType] = useState("");
   const [name, setName] = useState("");
+  const [subject, setSubject] = useState("");
 
   async function add(event: React.FormEvent) {
     event.preventDefault();
     if (!type && !name.trim()) return change.setMessage({ kind: "error", text: t("needStep") });
     const ok = await change.run(
-      () => pipelineApi.addStep(pipelineId, { step_type_id: type ? Number(type) : null, name: name.trim() || null }),
+      () =>
+        pipelineApi.addStep(pipelineId, {
+          step_type_id: type ? Number(type) : null,
+          name: name.trim() || null,
+          subject: subject.trim(),
+        }),
       t("stepAdded"),
     );
     if (ok) {
       setType("");
       setName("");
+      setSubject("");
     }
   }
 
@@ -257,6 +317,10 @@ function AddStep({ pipelineId, types }: { pipelineId: number; types: PipelineDet
         <label className="flex flex-col gap-1">
           {type ? t("nameOptional") : t("stepName")}
           <input className="rounded border px-2 py-1" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1">
+          {t("subjectOptional")}
+          <input className="rounded border px-2 py-1" value={subject} maxLength={200} placeholder={t("subjectHint")} onChange={(e) => setSubject(e.target.value)} />
         </label>
         <Button type="submit" size="sm" disabled={change.busy}>
           {t("add")}

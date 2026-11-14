@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { JOB_POLL_MS, isOpenJob } from "@/lib/api/docgen";
 import { docgenEnabled } from "@/lib/features";
-import { pipelineApi } from "@/lib/api/pipelines";
+import { type StepPage, pipelineApi, stepLabel } from "@/lib/api/pipelines";
 import { siteLabel } from "@/lib/api/sites";
 
 /**
@@ -75,7 +75,15 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
           {siteLabel(p) && ` · ${siteLabel(p)}`}
         </Link>
         <span aria-hidden>›</span>
-        <span className="opacity-70">{step.name}</span>
+        {d.parent && (
+          <>
+            <Link href={`/pipelines/${id}/steps/${d.parent.id}`} className="underline-offset-4 hover:underline">
+              {stepLabel(d.parent)}
+            </Link>
+            <span aria-hidden>›</span>
+          </>
+        )}
+        <span className="opacity-70">{stepLabel(step)}</span>
         <span className="ml-auto flex gap-2">
           {d.previous_step_id !== null && (
             <Link href={`/pipelines/${id}/steps/${d.previous_step_id}`} className="underline-offset-4 hover:underline">
@@ -102,8 +110,22 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
         stepRemoved && !viewOnly && <RestoreStep pipelineId={id} stepId={step.id} />
       )}
 
-      <StepHeader key={`header-${step.id}`} pipelineId={id} step={step} statuses={d.statuses} readOnly={readOnly} />
+      {d.parent && (
+        <p className="text-sm">
+          {t("answerTo")}{" "}
+          <Link href={`/pipelines/${id}/steps/${d.parent.id}`} className="underline underline-offset-4">
+            {stepLabel(d.parent)}
+          </Link>
+        </p>
+      )}
+      <StepHeader
+        key={`header-${step.id}`} pipelineId={id} step={step} statuses={d.statuses} readOnly={readOnly}
+        results={d.results ?? []} suggestedStatus={d.suggested_status ?? null}
+      />
       <StepDocuments pipelineId={id} page={d} readOnly={readOnly} />
+      {!d.parent && (
+        <FollowUps key={`follow-${step.id}`} pipelineId={id} page={d} readOnly={readOnly} />
+      )}
       {docgenEnabled() && (
         <StepDrafts
           key={`drafts-${step.id}`}
@@ -118,6 +140,93 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
       <History key={`history-${step.id}`} id={id} stepId={step.id} />
       {!readOnly && <RemoveStep key={`remove-${step.id}`} pipelineId={id} stepId={step.id} />}
     </main>
+  );
+}
+
+/**
+ * The follow-up steps of a main step (행정수정 답변, 보완/시정 답변, 재심의) and "Add follow-up
+ * step", always offered and highlighted when the IRB result asks for an answer (owner).
+ */
+function FollowUps({ pipelineId, page, readOnly }: { pipelineId: number; page: StepPage; readOnly: boolean }) {
+  const t = useTranslations("pipelines");
+  const change = useChange();
+  const types = page.follow_up_types ?? [];
+  const [type, setType] = useState(types[0] ? String(types[0].id) : "");
+  const [name, setName] = useState("");
+  const [subject, setSubject] = useState("");
+  const answers = page.follow_ups ?? [];
+  const highlight = page.needs_answer ?? false;
+
+  async function add(event: React.FormEvent) {
+    event.preventDefault();
+    if (!type && !name.trim()) return change.setMessage({ kind: "error", text: t("needStep") });
+    const ok = await change.run(
+      () =>
+        pipelineApi.addStep(pipelineId, {
+          step_type_id: type ? Number(type) : null,
+          name: name.trim() || null,
+          parent_step_id: page.step.id,
+          subject: subject.trim(),
+        }),
+      t("followUpAdded"),
+    );
+    if (ok) {
+      setName("");
+      setSubject("");
+    }
+  }
+
+  return (
+    <section
+      className={`flex flex-col gap-2 rounded border p-4 text-sm ${highlight ? "border-amber-400 bg-amber-50 dark:bg-amber-950/30" : ""}`}
+      aria-labelledby={`follow-ups-${page.step.id}`}
+    >
+      <h2 id={`follow-ups-${page.step.id}`} className="font-medium">
+        {t("followUps")}
+      </h2>
+      {highlight && <p className="text-amber-800 dark:text-amber-200">{t("needsAnswerNote")}</p>}
+      {answers.length === 0 ? (
+        <p className="opacity-70">{t("noFollowUps")}</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {answers.map((a) => (
+            <li key={a.id}>
+              <Link href={`/pipelines/${pipelineId}/steps/${a.id}`} className="underline-offset-4 hover:underline">
+                {stepLabel(a)}
+              </Link>
+              {a.subject && <span className="opacity-70"> ({a.subject})</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!readOnly && (
+        <form onSubmit={add} className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1">
+            {t("stepType")}
+            <select className="rounded border px-2 py-1" value={type} onChange={(e) => setType(e.target.value)}>
+              {types.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+              <option value="">{t("freeStep")}</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            {type ? t("nameOptional") : t("stepName")}
+            <input className="rounded border px-2 py-1" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1">
+            {t("subjectOptional")}
+            <input className="rounded border px-2 py-1" value={subject} maxLength={200} onChange={(e) => setSubject(e.target.value)} />
+          </label>
+          <Button type="submit" size="sm" variant={highlight ? "default" : "outline"} disabled={change.busy}>
+            {t("addFollowUp")}
+          </Button>
+        </form>
+      )}
+      <Note message={change.message} />
+    </section>
   );
 }
 

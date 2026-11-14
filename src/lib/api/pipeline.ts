@@ -17,9 +17,26 @@ export type StepType = {
   required_documents: string[];
   archived_at: string | null;
   updated_at: string;
+  category: StepCategory; // phase B2b
+  numbered: boolean; // shows "{n}차"
 };
 
+export const CATEGORIES = [
+  "initial", "amendment", "continuing", "deviation", "safety", "report", "closing", "follow_up", "other",
+] as const;
+export type StepCategory = (typeof CATEGORIES)[number];
+
 export type StepTypeInput = Omit<StepType, "id" | "archived_at" | "updated_at">;
+
+/** The IRB's answer (phase B2b). approved: counts as approved; needs_answer: offer a follow-up. */
+export type StepResultRow = {
+  key: string;
+  label: string;
+  approved: boolean;
+  needs_answer: boolean;
+  position: number;
+  archived_at: string | null;
+};
 
 export type PipelineTemplate = { hospital_id: number | null; step_type_ids: number[]; updated_at: string };
 
@@ -37,6 +54,16 @@ export const pipelineAdminApi = {
   reorderStatuses: (keys: string[]) => apiFetch<StepStatus[]>(`${base}/statuses/order`, json("PUT", { keys })),
   archiveStatus: (key: string) => apiFetch<StepStatus>(`${base}/statuses/${key}/archive`, { method: "POST" }),
   restoreStatus: (key: string) => apiFetch<StepStatus>(`${base}/statuses/${key}/restore`, { method: "POST" }),
+
+  results: (includeArchived = false) =>
+    apiFetch<StepResultRow[]>(`${base}/results${includeArchived ? "?include_archived=true" : ""}`),
+  addResult: (body: { label: string; approved: boolean; needs_answer: boolean }) =>
+    apiFetch<StepResultRow>(`${base}/results`, json("POST", body)),
+  updateResult: (key: string, body: { label?: string; approved?: boolean; needs_answer?: boolean }) =>
+    apiFetch<StepResultRow>(`${base}/results/${key}`, json("PATCH", body)),
+  reorderResults: (keys: string[]) => apiFetch<StepResultRow[]>(`${base}/results/order`, json("PUT", { keys })),
+  archiveResult: (key: string) => apiFetch<StepResultRow>(`${base}/results/${key}/archive`, { method: "POST" }),
+  restoreResult: (key: string) => apiFetch<StepResultRow>(`${base}/results/${key}/restore`, { method: "POST" }),
 
   stepTypes: (includeArchived = false) =>
     apiFetch<StepType[]>(`${base}/step-types${includeArchived ? "?include_archived=true" : ""}`),

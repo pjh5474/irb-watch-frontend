@@ -44,7 +44,21 @@ export type PipelineStep = {
   decided_on: string | null;
   note: string;
   deleted_at: string | null;
+  // phase B2b
+  parent_step_id?: number | null; // a follow-up: the main step it answers
+  sequence_no?: number | null; // "2" in 2차 변경심의
+  label?: string; // the name as shown: "2차 변경심의"
+  subject?: string; // what the step is about: "PT 2.0, CRF 1.1"
+  result_key?: string | null; // the IRB's answer; null: none yet
 };
+
+/** The IRB's answer to a step (admin-edited list). needs_answer: offer a follow-up step. */
+export type StepResult = { key: string; label: string; approved: boolean; needs_answer: boolean; archived: boolean };
+
+export type StepTypeRef = { id: number; name: string; description: string; category?: string; numbered?: boolean };
+
+/** "2차 변경심의": the server's label, or the name for an older server. */
+export const stepLabel = (s: Pick<PipelineStep, "name" | "label">) => s.label || s.name;
 
 /** A step row of the overview: counts only; the documents are on the step page. */
 export type OverviewStep = PipelineStep & {
@@ -62,8 +76,9 @@ export type PipelineDetail = {
   pipeline: PipelineSummary;
   steps: OverviewStep[];
   statuses: PipelineStatus[];
-  step_types: { id: number; name: string; description: string }[];
+  step_types: StepTypeRef[];
   access: ProjectAccess; // read = change nothing (a platform admin's support access)
+  results?: StepResult[]; // archived ones too, for labels
 };
 
 /**
@@ -82,6 +97,40 @@ export type StepPage = {
   statuses: PipelineStatus[];
   access: ProjectAccess;
   shared: boolean; // the project has members: a draft made here is read by all of them
+  // phase B2b
+  results?: StepResult[];
+  parent?: PipelineStep | null; // the main step a follow-up answers
+  follow_ups?: PipelineStep[];
+  follow_up_types?: StepTypeRef[]; // live follow-up types, for "Add follow-up step"
+  suggested_status?: string | null; // offered after a result; the user confirms
+  needs_answer?: boolean; // the result asks for an answer: highlight "Add follow-up step"
+};
+
+/** One site's column on the hospital page: its live main steps. */
+export type HospitalStep = {
+  id: number;
+  step_type_id: number | null;
+  name: string;
+  label: string;
+  sequence_no: number | null;
+  subject: string;
+  status_key: string;
+  result_key: string | null;
+  due_on: string | null;
+  submitted_on: string | null;
+  decided_on: string | null;
+  follow_ups: number;
+};
+
+export type HospitalPage = {
+  project_id: number;
+  hospital_id: number;
+  hospital_name: string | null;
+  sites: { site_id: number; site_no: string; pi_name: string; pipeline_id: number | null; steps: HospitalStep[] }[];
+  statuses: PipelineStatus[];
+  results: StepResult[];
+  step_types: StepTypeRef[];
+  access: ProjectAccess;
 };
 
 export type PipelineEvent = {
@@ -101,6 +150,9 @@ export type StepChange = Partial<{
   submitted_on: string | null;
   decided_on: string | null;
   note: string;
+  subject: string;
+  sequence_no: number | null;
+  result_key: string | null;
 }>;
 
 /** One of the user's own files offered for an AI draft of a step (its newest version). */
@@ -147,8 +199,12 @@ export const pipelineApi = {
     apiFetch<PipelineEvent[]>(`/pipelines/${id}/history${stepId === undefined ? "" : `?step_id=${stepId}`}`),
   getStep: (id: number, stepId: number) => apiFetch<StepPage>(step(id, stepId)),
 
-  addStep: (id: number, body: { name?: string | null; step_type_id?: number | null }) =>
-    apiFetch<PipelineStep>(`/pipelines/${id}/steps`, json("POST", body)),
+  addStep: (
+    id: number,
+    body: { name?: string | null; step_type_id?: number | null; parent_step_id?: number | null; subject?: string },
+  ) => apiFetch<PipelineStep>(`/pipelines/${id}/steps`, json("POST", body)),
+  hospital: (projectId: number, hospitalId: number) =>
+    apiFetch<HospitalPage>(`/projects/${projectId}/hospitals/${hospitalId}`),
   updateStep: (id: number, stepId: number, change: StepChange) =>
     apiFetch<PipelineStep>(step(id, stepId), json("PATCH", change)),
   reorder: (id: number, stepIds: number[]) =>

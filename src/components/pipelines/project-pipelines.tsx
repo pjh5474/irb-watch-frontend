@@ -132,6 +132,12 @@ export function ProjectPipelines({ projectId, hospitals }: { projectId: number; 
             <li key={hospital.id} className="flex flex-col gap-2 rounded border p-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="flex-1 font-medium">{hospital.name}</span>
+                {/* The hospital page lines PIs up; linked only when there are two or more (owner). */}
+                {own.length >= 2 && (
+                  <Link href={`/projects/${projectId}/hospitals/${hospital.id}`} className="text-xs underline underline-offset-4">
+                    {t("hospitalPage")}
+                  </Link>
+                )}
                 {own.length === 0 &&
                   (canEdit ? (
                     <Button size="sm" variant="outline" disabled={flight.busy} onClick={() => void start({ hospital_id: hospital.id })}>

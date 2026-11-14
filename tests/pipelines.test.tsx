@@ -116,6 +116,8 @@ const state = vi.hoisted(() => ({
   inputs: null as unknown,
   page: {} as Record<string, unknown>, // overrides of the step page
   sites: [] as unknown[],
+  detail: null as unknown, // replaces the overview when set (phase B2b tests)
+  hospital: null as unknown,
 }));
 
 vi.mock("@/lib/api/sites", async () => {
@@ -213,7 +215,8 @@ vi.mock("@/lib/api/pipelines", async () => {
         state.calls.push(["start", projectId, target]);
         return { id: 77 };
       },
-      get: async () => DETAIL,
+      get: async () => state.detail ?? DETAIL,
+      hospital: async () => state.hospital,
       getStep: async () => ({ ...PAGE, drafts: state.drafts, jobs: state.jobs, ...state.page }),
       history: async (id: number, stepId?: number) => {
         state.calls.push(["history", id, stepId]);
@@ -261,9 +264,171 @@ beforeEach(() => {
   state.inputs = INPUTS;
   state.page = {};
   state.sites = [];
+  state.detail = null;
+  state.hospital = null;
 });
 
 afterEach(cleanup);
+
+describe("steps (phase B2b): follow-ups, numbers, subject, IRB result, hospital page", () => {
+  const RESULTS = [
+    { key: "approved", label: "Approved", approved: true, needs_answer: false, archived: false },
+    { key: "administrative_revision", label: "Admin revision", approved: false, needs_answer: true, archived: false },
+    { key: "gone", label: "Gone", approved: false, needs_answer: false, archived: true },
+  ];
+  const ANSWER: PipelineStep = {
+    ...INITIAL, id: 24, step_type_id: 7, step_type_name: "Answer", name: "Answer", position: 5,
+    parent_step_id: 21, sequence_no: 1, label: "1차 Answer", subject: "first round",
+  };
+  const row = { documents: 0, required: 0, required_missing: 0, drafts: 0, open_jobs: 0 };
+
+  it("shows follow-ups indented under their main step and moves them with it", async () => {
+    state.detail = {
+      ...DETAIL,
+      results: RESULTS,
+      steps: [
+        { ...INITIAL, ...row, result_key: "administrative_revision", subject: "PT 2.0" },
+        { ...ANSWER, ...row },
+        { ...MEETING, ...row },
+      ],
+    };
+    wrap(<PipelineView id={9} />);
+    await screen.findByRole("heading", { name: "IRB pipeline: SNUH" });
+    expect(screen.getByText("01")).toBeTruthy();
+    expect(screen.getByText("01-1")).toBeTruthy();
+    expect(screen.getByText("02")).toBeTruthy();
+    const answers = screen.getByRole("list", { name: "Follow-up steps of Initial review" });
+    expect(within(answers).getByRole("link", { name: "1차 Answer" }).getAttribute("href")).toBe("/pipelines/9/steps/24");
+    expect(screen.getByText("(PT 2.0)")).toBeTruthy();
+    expect(screen.getByText("Admin revision")).toBeTruthy(); // the IRB result
+    expect(screen.queryByRole("button", { name: "Move 1차 Answer up" })).toBeNull(); // follow-ups do not move alone
+    fireEvent.click(screen.getByRole("button", { name: "Move Meeting up" }));
+    await vi.waitFor(() => expect(state.calls).toEqual([["reorder", 9, [22, 21, 24]]]));
+  });
+
+  it("keeps follow-up types out of the add-step list", async () => {
+    state.detail = { ...DETAIL, step_types: [{ id: 2, name: "Amendment", description: "" }, { id: 7, name: "Answer", description: "", category: "follow_up" }] };
+    wrap(<PipelineView id={9} />);
+    const select = (await screen.findByLabelText("Step type")) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Free step (no type)", "Amendment"]);
+  });
+
+  it("sets the IRB result, offers the matching status and highlights the follow-up", async () => {
+    state.page = {
+      step: { ...INITIAL, result_key: "administrative_revision", sequence_no: null, label: "Initial review" },
+      results: RESULTS,
+      suggested_status: "submitted",
+      needs_answer: true,
+      follow_ups: [ANSWER],
+      follow_up_types: [{ id: 7, name: "Answer", description: "", category: "follow_up" }],
+    };
+    wrap(<StepPageView id={9} stepId={21} />);
+    const result = (await screen.findByLabelText("IRB result")) as HTMLSelectElement;
+    expect([...result.options].map((o) => o.textContent)).toEqual(["No result yet", "Approved", "Admin revision"]); // archived left out
+    fireEvent.change(result, { target: { value: "approved" } });
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["updateStep", 9, 21, { result_key: "approved" }]));
+    const offer = screen.getByRole("button", { name: "Set status to Submitted" }) as HTMLButtonElement;
+    await vi.waitFor(() => expect(offer.disabled).toBe(false)); // one change at a time
+    fireEvent.click(offer);
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["updateStep", 9, 21, { status_key: "submitted" }]));
+
+    const follow = within(screen.getByRole("region", { name: "Follow-up steps" }));
+    expect(follow.getByText(/The IRB asked for an answer/)).toBeTruthy();
+    expect(follow.getByRole("link", { name: "1차 Answer" })).toBeTruthy();
+    fireEvent.change(follow.getByLabelText("Subject (optional)"), { target: { value: " 2nd " } });
+    fireEvent.click(follow.getByRole("button", { name: "Add follow-up step" }));
+    await vi.waitFor(() =>
+      expect(state.calls).toContainEqual(["addStep", 9, { step_type_id: 7, name: null, parent_step_id: 21, subject: "2nd" }]),
+    );
+  });
+
+  it("edits the round number and the subject", async () => {
+    state.page = { step: { ...INITIAL, sequence_no: 2, label: "2차 Initial review", subject: "" }, results: RESULTS };
+    wrap(<StepPageView id={9} stepId={21} />);
+    const number = await screen.findByLabelText("Round number");
+    const status = screen.getByLabelText("Status") as HTMLSelectElement; // disabled while a change is saved
+    const idle = () => vi.waitFor(() => expect(status.disabled).toBe(false));
+    fireEvent.change(number, { target: { value: "3" } });
+    fireEvent.blur(number);
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["updateStep", 9, 21, { sequence_no: 3 }]));
+    await idle();
+    fireEvent.change(number, { target: { value: "1000" } });
+    fireEvent.blur(number);
+    expect((await screen.findByRole("alert")).textContent).toBe("The number must be 1 to 999, or empty.");
+    fireEvent.change(number, { target: { value: "" } });
+    fireEvent.blur(number);
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["updateStep", 9, 21, { sequence_no: null }]));
+    await idle();
+    const subject = screen.getByLabelText("Subject");
+    fireEvent.change(subject, { target: { value: " PT 2.0 " } });
+    fireEvent.blur(subject);
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["updateStep", 9, 21, { subject: "PT 2.0" }]));
+  });
+
+  it("a follow-up names the step it answers and has no follow-ups of its own", async () => {
+    state.page = { step: ANSWER, parent: { ...INITIAL, label: "Initial review" }, results: RESULTS };
+    wrap(<StepPageView id={9} stepId={24} />);
+    await screen.findByText("Answer to:");
+    expect(screen.getAllByRole("link", { name: "Initial review" })[0].getAttribute("href")).toBe("/pipelines/9/steps/21");
+    expect(screen.queryByRole("region", { name: "Follow-up steps" })).toBeNull();
+  });
+
+  it("the project page links the hospital page when a hospital has two or more PIs", async () => {
+    const SITE = { id: 30, project_id: 1, hospital_id: 4, site_no: "01", pi_name: "Kim", note: "", created_at: "", updated_at: "", deleted_at: null };
+    state.sites = [SITE, { ...SITE, id: 31, site_no: "02", pi_name: "Lee" }, { ...SITE, id: 32, hospital_id: 5 }];
+    wrap(<ProjectPipelines projectId={1} hospitals={[{ id: 4, name: "SNUH" }, { id: 5, name: "Ewha" }]} />);
+    const links = await screen.findAllByRole("link", { name: "Compare PIs" });
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/projects/1/hospitals/4"]);
+  });
+});
+
+describe("HospitalView", () => {
+  const step = (id: number, extra: object) => ({
+    id, step_type_id: 1, name: "Initial", label: "Initial", sequence_no: null, subject: "", status_key: "not_started",
+    result_key: null, due_on: null, submitted_on: null, decided_on: null, follow_ups: 0, ...extra,
+  });
+
+  it("lines up the sites of a hospital, one row per step type and round", async () => {
+    state.hospital = {
+      project_id: 1, hospital_id: 4, hospital_name: "SNUH", access: "owner",
+      statuses: STATUSES,
+      results: [{ key: "approved", label: "Approved", approved: true, needs_answer: false, archived: false }],
+      step_types: [],
+      sites: [
+        {
+          site_id: 30, site_no: "01", pi_name: "Kim", pipeline_id: 9,
+          steps: [
+            step(1, { status_key: "approved", result_key: "approved", decided_on: "2026-11-01", follow_ups: 2 }),
+            step(2, { step_type_id: 2, name: "Amendment", label: "1차 Amendment", sequence_no: 1, subject: "PT 2.0" }),
+          ],
+        },
+        { site_id: 31, site_no: "02", pi_name: "Lee", pipeline_id: 10, steps: [step(3, {})] },
+        { site_id: 32, site_no: "", pi_name: "Park", pipeline_id: null, steps: [] },
+      ],
+    };
+    const { HospitalView } = await import("../src/components/pipelines/hospital-view");
+    wrap(<HospitalView projectId={1} hospitalId={4} />);
+    await screen.findByRole("heading", { name: "SNUH: PIs side by side" });
+    expect(screen.getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["", "01 · PI Kim", "02 · PI Lee", "PI ParkNo pipeline yet"]);
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((r) => within(r).getByRole("rowheader").textContent)).toEqual(["Initial", "1차 Amendment"]);
+    const first = within(rows[0]);
+    expect(first.getByRole("link", { name: "Approved" }).getAttribute("href")).toBe("/pipelines/9/steps/1");
+    expect(first.getByText("2 follow-ups")).toBeTruthy();
+    expect(first.getByText("Decided 2026-11-01")).toBeTruthy();
+    expect(within(rows[1]).getByText("PT 2.0")).toBeTruthy();
+    expect(within(rows[1]).getAllByText("—")).toHaveLength(2); // Lee and Park have no amendment
+  });
+
+  it("shows the server's reason when the page cannot be read", async () => {
+    const { pipelineApi } = await import("../src/lib/api/pipelines");
+    const spy = vi.spyOn(pipelineApi, "hospital").mockRejectedValue(new ApiError(404, "project not found"));
+    const { HospitalView } = await import("../src/components/pipelines/hospital-view");
+    wrap(<HospitalView projectId={1} hospitalId={4} />);
+    expect((await screen.findByRole("alert")).textContent).toBe("project not found");
+    spy.mockRestore();
+  });
+});
 
 describe("helpers", () => {
   it("labels sizes, counts days and knows Seoul's date", () => {
@@ -360,7 +525,7 @@ describe("PipelineView (overview)", () => {
     fireEvent.change(screen.getByLabelText("Step type"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     await screen.findByText("Step added.");
-    expect(state.calls).toEqual([["addStep", 9, { step_type_id: 2, name: null }]]);
+    expect(state.calls).toEqual([["addStep", 9, { step_type_id: 2, name: null, subject: "" }]]);
   });
 
   it("links removed steps to their page and restores them", async () => {

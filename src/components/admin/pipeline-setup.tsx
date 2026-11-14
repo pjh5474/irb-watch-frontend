@@ -14,7 +14,10 @@ import { adminApi } from "@/lib/api/admin";
 import { docgenApi } from "@/lib/api/docgen";
 import { docgenEnabled } from "@/lib/features";
 import {
+  CATEGORIES,
   MAX_INSTRUCTIONS,
+  type StepCategory,
+  type StepResultRow,
   type StepStatus,
   type StepType,
   type StepTypeInput,
@@ -74,7 +77,135 @@ export function PipelineSetup() {
       <StepOrder />
       <StepTypes />
       <Statuses />
+      <Results />
     </main>
+  );
+}
+
+// ---- IRB results (phase B2b) ----------------------------------------------------------------
+
+function Results() {
+  const t = useTranslations("admin");
+  const [showArchived, setShowArchived] = useState(false);
+  const results = useQuery({
+    queryKey: [...PIPELINE_KEY, "results", showArchived],
+    queryFn: () => api.results(showArchived),
+  });
+  const { act, busy, message, setMessage } = useAction();
+  const [label, setLabel] = useState("");
+  const [approved, setApproved] = useState(false);
+  const [needsAnswer, setNeedsAnswer] = useState(false);
+  const live = (results.data ?? []).filter((r) => r.archived_at === null);
+
+  async function add(event: React.FormEvent) {
+    event.preventDefault();
+    if (!label.trim()) return setMessage({ kind: "error", text: t("pipeline.needName") });
+    if (await act(() => api.addResult({ label: label.trim(), approved, needs_answer: needsAnswer }), t("pipeline.saved"))) {
+      setLabel("");
+      setApproved(false);
+      setNeedsAnswer(false);
+    }
+  }
+
+  return (
+    <Section icon={Flag} accent="slate" title={t("pipeline.resultsTitle")}>
+      <p className="text-sm opacity-80">{t("pipeline.resultsIntro")}</p>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+        {t("pipeline.showArchived")}
+      </label>
+      {results.isError && (
+        <p role="alert" className="text-sm text-red-600">
+          {adminErrorText(results.error, t)}
+        </p>
+      )}
+      <ul className="flex flex-col divide-y">
+        {(results.data ?? []).map((r) => {
+          const index = live.findIndex((x) => x.key === r.key);
+          const archived = r.archived_at !== null;
+          return (
+            <li key={r.key} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+              <ResultLabel result={r} act={act} />
+              {r.approved && <Badge tone="good">{t("pipeline.approved")}</Badge>}
+              {r.needs_answer && <Badge>{t("pipeline.needsAnswer")}</Badge>}
+              {archived && <Badge>{t("pipeline.archived")}</Badge>}
+              <span className="ml-auto flex flex-wrap gap-1">
+                {!archived ? (
+                  <>
+                    <Button size="sm" variant="outline" disabled={busy || index <= 0} aria-label={t("pipeline.up", { name: r.label })}
+                      onClick={() => act(() => api.reorderResults(moved(live.map((x) => x.key), index, -1)), t("pipeline.saved"))}>
+                      <ArrowUp className="size-4" aria-hidden />
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={busy || index >= live.length - 1} aria-label={t("pipeline.down", { name: r.label })}
+                      onClick={() => act(() => api.reorderResults(moved(live.map((x) => x.key), index, 1)), t("pipeline.saved"))}>
+                      <ArrowDown className="size-4" aria-hidden />
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={busy}
+                      onClick={() => act(() => api.updateResult(r.key, { approved: !r.approved }), t("pipeline.saved"))}>
+                      {r.approved ? t("pipeline.markNotApproved") : t("pipeline.markApproved")}
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={busy}
+                      onClick={() => act(() => api.updateResult(r.key, { needs_answer: !r.needs_answer }), t("pipeline.saved"))}>
+                      {r.needs_answer ? t("pipeline.markNoAnswer") : t("pipeline.markNeedsAnswer")}
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={busy} onClick={() => act(() => api.archiveResult(r.key), t("pipeline.saved"))}>
+                      {t("pipeline.archive")}
+                    </Button>
+                  </>
+                ) : (
+                  <Button size="sm" variant="outline" disabled={busy} onClick={() => act(() => api.restoreResult(r.key), t("pipeline.saved"))}>
+                    {t("pipeline.restore")}
+                  </Button>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <form onSubmit={add} className="flex flex-wrap items-end gap-2 text-sm">
+        <label className="flex min-w-48 flex-1 flex-col gap-1">
+          {t("pipeline.newResult")}
+          <input className="rounded border px-2 py-1.5" value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} />
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={approved} onChange={(e) => setApproved(e.target.checked)} />
+          {t("pipeline.approved")}
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={needsAnswer} onChange={(e) => setNeedsAnswer(e.target.checked)} />
+          {t("pipeline.needsAnswer")}
+        </label>
+        <Button type="submit" size="sm" disabled={busy}>
+          {t("pipeline.add")}
+        </Button>
+      </form>
+      <Note message={message} />
+    </Section>
+  );
+}
+
+function ResultLabel({
+  result,
+  act,
+}: {
+  result: StepResultRow;
+  act: (work: () => Promise<unknown>, ok: string) => Promise<boolean>;
+}) {
+  const t = useTranslations("admin");
+  const [label, setLabel] = useState(result.label);
+  if (result.archived_at !== null) return <span className="opacity-70">{result.label}</span>;
+  return (
+    <input
+      aria-label={t("pipeline.resultName")}
+      className="w-40 rounded border px-2 py-1"
+      value={label}
+      maxLength={60}
+      onChange={(e) => setLabel(e.target.value)}
+      onBlur={() => {
+        if (label.trim() && label.trim() !== result.label)
+          void act(() => api.updateResult(result.key, { label: label.trim() }), t("pipeline.saved"));
+      }}
+    />
   );
 }
 
@@ -234,6 +365,8 @@ const EMPTY: StepTypeInput = {
   input_earlier_steps: true,
   input_board_documents: false,
   required_documents: [],
+  category: "other",
+  numbered: false,
 };
 
 function StepTypes() {
@@ -276,6 +409,8 @@ function StepTypes() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{type.name}</span>
               {type.archived_at && <Badge>{t("pipeline.archived")}</Badge>}
+              {type.category && <span className="text-xs opacity-70">{t(`pipeline.categories.${type.category}`)}</span>}
+              {type.numbered && <span className="text-xs opacity-70">{t("pipeline.numberedShort")}</span>}
               {type.instructions && docgenEnabled() && <Badge tone="good">{t("pipeline.hasInstructions")}</Badge>}
               {type.required_documents.length > 0 && (
                 <span className="opacity-70">{t("pipeline.requiredCount", { n: type.required_documents.length })}</span>
@@ -334,6 +469,8 @@ function StepTypeEditor({
     input_earlier_steps: initial.input_earlier_steps,
     input_board_documents: initial.input_board_documents,
     required_documents: [...initial.required_documents],
+    category: initial.category ?? "other",
+    numbered: initial.numbered ?? false,
   });
   const [docsText, setDocsText] = useState(initial.required_documents.join("\n"));
   const { act, busy, message, setMessage } = useAction();
@@ -363,6 +500,27 @@ function StepTypeEditor({
         {t("pipeline.description")}
         <textarea className="rounded border px-2 py-1.5" rows={2} maxLength={1000} value={value.description} onChange={(e) => set({ description: e.target.value })} />
       </label>
+      <div className="flex flex-wrap items-end gap-4">
+        <label className="flex flex-col gap-1">
+          {t("pipeline.category")}
+          <select
+            className="rounded border px-2 py-1.5"
+            value={value.category}
+            onChange={(e) => set({ category: e.target.value as StepCategory })}
+          >
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {t(`pipeline.categories.${c}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={value.numbered} onChange={(e) => set({ numbered: e.target.checked })} />
+          {t("pipeline.numbered")}
+        </label>
+      </div>
+      {value.category === "follow_up" && <p className="text-xs opacity-70">{t("pipeline.followUpHint")}</p>}
       {ai && (
       <>
       <div className="flex flex-col gap-1">
@@ -494,7 +652,8 @@ function StepOrder() {
           hospitalId={hospitalId}
           initial={saved?.step_type_ids ?? global?.step_type_ids ?? []}
           hasOwn={hospitalId !== null && saved !== undefined}
-          types={types.data}
+          // Follow-up types answer another step: never in a default order (the server refuses them).
+          types={types.data.filter((x) => x.category !== "follow_up")}
         />
       )}
     </Section>

@@ -23,8 +23,8 @@ import {
   type StepTypeInput,
   moved,
   pipelineAdminApi as api,
-  requiredDocsFromText,
 } from "@/lib/api/pipeline";
+import { DocumentListEditor } from "@/components/admin/document-lists";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 export const PIPELINE_KEY = ["admin", "pipeline"] as const;
@@ -364,7 +364,6 @@ const EMPTY: StepTypeInput = {
   form_template_id: null,
   input_earlier_steps: true,
   input_board_documents: false,
-  required_documents: [],
   category: "other",
   numbered: false,
 };
@@ -377,6 +376,7 @@ function StepTypes() {
     queryFn: () => api.stepTypes(showArchived),
   });
   const [editing, setEditing] = useState<number | "new" | null>(null);
+  const [documentsOf, setDocumentsOf] = useState<number | null>(null); // the open document list editor
   const { act, busy, message, setMessage } = useAction();
   // The editor closes after a save, so its success line is shown here.
   const saved = () => {
@@ -412,13 +412,20 @@ function StepTypes() {
               {type.category && <span className="text-xs opacity-70">{t(`pipeline.categories.${type.category}`)}</span>}
               {type.numbered && <span className="text-xs opacity-70">{t("pipeline.numberedShort")}</span>}
               {type.instructions && docgenEnabled() && <Badge tone="good">{t("pipeline.hasInstructions")}</Badge>}
-              {type.required_documents.length > 0 && (
-                <span className="opacity-70">{t("pipeline.requiredCount", { n: type.required_documents.length })}</span>
-              )}
               <span className="ml-auto flex gap-1">
                 {!type.archived_at && (
                   <Button size="sm" variant="outline" onClick={() => setEditing(editing === type.id ? null : type.id)}>
                     {editing === type.id ? t("pipeline.close") : t("pipeline.edit")}
+                  </Button>
+                )}
+                {!type.archived_at && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-expanded={documentsOf === type.id}
+                    onClick={() => setDocumentsOf(documentsOf === type.id ? null : type.id)}
+                  >
+                    {documentsOf === type.id ? t("pipeline.close") : t("pipeline.documentsButton")}
                   </Button>
                 )}
                 {!type.archived_at ? (
@@ -434,6 +441,7 @@ function StepTypes() {
             </div>
             {type.description && <p className="opacity-80">{type.description}</p>}
             {editing === type.id && <StepTypeEditor id={type.id} initial={type} onSaved={saved} onCancel={cancel} />}
+            {documentsOf === type.id && <DocumentListEditor stepTypeId={type.id} stepTypeName={type.name} />}
           </li>
         ))}
       </ul>
@@ -468,11 +476,9 @@ function StepTypeEditor({
     form_template_id: initial.form_template_id,
     input_earlier_steps: initial.input_earlier_steps,
     input_board_documents: initial.input_board_documents,
-    required_documents: [...initial.required_documents],
     category: initial.category ?? "other",
     numbered: initial.numbered ?? false,
   });
-  const [docsText, setDocsText] = useState(initial.required_documents.join("\n"));
   const { act, busy, message, setMessage } = useAction();
   const set = (patch: Partial<StepTypeInput>) => setValue((v) => ({ ...v, ...patch }));
 
@@ -481,7 +487,7 @@ function StepTypeEditor({
     if (!value.name.trim()) return setMessage({ kind: "error", text: t("pipeline.needName") });
     if (value.instructions.length > MAX_INSTRUCTIONS)
       return setMessage({ kind: "error", text: t("pipeline.tooLong", { n: MAX_INSTRUCTIONS }) });
-    const body = { ...value, name: value.name.trim(), required_documents: requiredDocsFromText(docsText) };
+    const body = { ...value, name: value.name.trim() };
     const ok = await act(
       () => (id === undefined ? api.createStepType(body) : api.updateStepType(id, body)),
       t("pipeline.saved"),
@@ -581,20 +587,6 @@ function StepTypeEditor({
       </fieldset>
       </>
       )}
-      <div className="flex flex-col gap-1">
-        <label htmlFor={`${prefix}-docs`}>{t("pipeline.requiredDocs")}</label>
-        <textarea
-          id={`${prefix}-docs`}
-          aria-describedby={`${prefix}-docs-hint`}
-          className="rounded border px-2 py-1.5"
-          rows={4}
-          value={docsText}
-          onChange={(e) => setDocsText(e.target.value)}
-        />
-        <span id={`${prefix}-docs-hint`} className="text-xs opacity-70">
-          {t("pipeline.requiredDocsHint")}
-        </span>
-      </div>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={busy} aria-busy={busy}>
           {busy && <Spinner aria-hidden />}

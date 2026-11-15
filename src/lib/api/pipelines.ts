@@ -31,7 +31,31 @@ export type DocVersion = {
   created_at: string;
 };
 
-export type StepDocument = { id: number; name: string; created_at: string; deleted_at: string | null; versions: DocVersion[] };
+/** Where a document sits in a step (phase C1): 신청서 및 통지서 = application + received. */
+export type DocSection = "application" | "submission" | "received" | "reference";
+/** needed: nothing yet; in_progress: a file arrived; final: marked by a user; not_needed: counts as done. */
+export type DocStatus = "needed" | "in_progress" | "final" | "not_needed";
+/** The page's order of sections. */
+export const DOC_SECTIONS: DocSection[] = ["application", "received", "submission", "reference"];
+
+/** A document slot of a step (phase C1). listed: from the step type's list (name and section stay). */
+export type StepDocument = {
+  id: number;
+  name: string;
+  created_at: string;
+  deleted_at: string | null;
+  versions: DocVersion[]; // newest first
+  listed?: boolean;
+  section?: DocSection;
+  origin?: string;
+  required?: boolean;
+  status?: DocStatus;
+  note?: string;
+};
+
+export type ChecklistItem = { name: string; done: boolean; status: DocStatus; document_id: number | null };
+
+export type DocumentChange = Partial<{ name: string; section: DocSection; note: string; status: DocStatus }>;
 
 export type PipelineStep = {
   id: number;
@@ -65,8 +89,8 @@ export const stepLabel = (s: Pick<PipelineStep, "name" | "label">) => s.label ||
 /** A step row of the overview: counts only; the documents are on the step page. */
 export type OverviewStep = PipelineStep & {
   documents: number; // live documents with at least one file
-  required: number; // checklist names of the step type
-  required_missing: number;
+  required: number; // required document slots (phase C1)
+  required_missing: number; // required slots not final and not marked not needed
   drafts: number; // the user's drafts made in this step
   open_jobs: number; // draft jobs queued or running for this step
 };
@@ -91,7 +115,7 @@ export type StepPage = {
   pipeline: PipelineSummary;
   step: PipelineStep;
   documents: StepDocument[];
-  checklist: { name: string; uploaded: boolean }[];
+  checklist: ChecklistItem[];
   drafts: Draft[];
   jobs: DraftJob[]; // open, and failed in the last 24 hours
   previous_step_id: number | null;
@@ -224,8 +248,18 @@ export const pipelineApi = {
 
   draftInputs: (id: number, stepId: number) => apiFetch<DraftInputs>(`${step(id, stepId)}/draft-inputs`),
 
-  upload: (id: number, stepId: number, name: string, file: UploadFile) =>
-    apiFetch<{ document: StepDocument; version_no: number }>(`${step(id, stepId)}/documents`, json("POST", { name, file })),
+  /** Into a slot (documentId), or by name: that slot, else a new one of the user's in `section`. */
+  upload: (id: number, stepId: number, name: string, file: UploadFile, documentId?: number, section?: DocSection) =>
+    apiFetch<{ document: StepDocument; version_no: number }>(
+      `${step(id, stepId)}/documents`,
+      json("POST", { name, file, document_id: documentId ?? null, section: section ?? null }),
+    ),
+  addDocument: (id: number, stepId: number, name: string, section: DocSection) =>
+    apiFetch<StepDocument>(`${step(id, stepId)}/document-slots`, json("POST", { name, section })),
+  updateDocument: (id: number, stepId: number, documentId: number, change: DocumentChange) =>
+    apiFetch<StepDocument>(`${step(id, stepId)}/documents/${documentId}`, json("PATCH", change)),
+  reorderDocuments: (id: number, stepId: number, documentIds: number[]) =>
+    apiFetch<StepDocument[]>(`${step(id, stepId)}/documents/order`, json("PUT", { document_ids: documentIds })),
   setDocumentRemoved: (id: number, stepId: number, documentId: number, removed: boolean) =>
     apiFetch<StepDocument>(`${step(id, stepId)}/documents/${documentId}/${removed ? "remove" : "restore"}`, {
       method: "POST",

@@ -84,8 +84,8 @@ const PAGE: StepPage = {
   step: INITIAL,
   statuses: STATUSES,
   checklist: [
-    { name: "Protocol", uploaded: true },
-    { name: "Consent", uploaded: false },
+    { name: "Protocol", done: true, status: "final", document_id: 31 },
+    { name: "Consent", done: false, status: "needed", document_id: 32 },
   ],
   documents: [
     {
@@ -93,11 +93,19 @@ const PAGE: StepPage = {
       name: "Protocol",
       created_at: "2026-11-11T00:00:00Z",
       deleted_at: null,
+      listed: true,
+      section: "submission",
+      required: true,
+      status: "final",
       versions: [
         { version_no: 2, filename: "p2.docx", size_bytes: 12_000, has_text: true, text_note: null, created_at: "2026-11-12T00:00:00Z" },
         { version_no: 1, filename: "p1.docx", size_bytes: 11_000, has_text: true, text_note: null, created_at: "2026-11-11T00:00:00Z" },
       ],
     },
+    { id: 32, name: "Consent", created_at: "2026-11-11T00:00:00Z", deleted_at: null, listed: true, section: "submission", required: true, status: "needed", versions: [] },
+    { id: 33, name: "신청서", created_at: "2026-11-11T00:00:00Z", deleted_at: null, listed: true, section: "application", required: false, status: "in_progress", versions: [
+      { version_no: 1, filename: "a.hwp", size_bytes: 3_000, has_text: true, text_note: null, created_at: "2026-11-11T00:00:00Z" },
+    ] },
   ],
   drafts: [],
   jobs: [],
@@ -234,10 +242,13 @@ vi.mock("@/lib/api/pipelines", async () => {
       setDocumentRemoved: call("setDocumentRemoved"),
       downloadUrl: async () => ({ url: "https://files.example/x" }),
       draftInputs: async () => state.inputs,
-      upload: async (id: number, stepId: number, name: string, file: { filename: string }) => {
-        state.calls.push(["upload", id, stepId, name, file.filename]);
+      upload: async (id: number, stepId: number, name: string, file: { filename: string }, documentId?: number) => {
+        state.calls.push(["upload", id, stepId, name, file.filename, documentId]);
         return { document: { name }, version_no: 3 };
       },
+      addDocument: call("addDocument"),
+      updateDocument: call("updateDocument"),
+      reorderDocuments: call("reorderDocuments"),
     },
   };
 });
@@ -564,8 +575,12 @@ describe("StepPageView", () => {
     expect(screen.getByRole("button", { name: "Download Protocol version 1" })).toBeTruthy();
   });
 
-  it("changes status and dates", async () => {
+  it("changes status and dates; submitting with a required document not done asks first", async () => {
+    const ask = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     await stepPage();
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "submitted" } });
+    expect(ask).toHaveBeenCalledWith(expect.stringContaining("Consent"));
+    expect(state.calls).toEqual([]); // cancelled: nothing saved
     // One change at a time: the controls are disabled while a change is saved.
     fireEvent.change(screen.getByLabelText("Status"), { target: { value: "submitted" } });
     await vi.waitFor(() => expect((screen.getByLabelText("Due date") as HTMLInputElement).disabled).toBe(false));
@@ -576,20 +591,40 @@ describe("StepPageView", () => {
         ["updateStep", 9, 21, { due_on: "2026-12-31" }],
       ]),
     );
+    ask.mockRestore();
   });
 
-  it("uploads to a checklist name or a typed one, and checks the file first", async () => {
+  it("groups slots by section and uploads into a slot, checking the file first", async () => {
     await stepPage();
-    const form = within(screen.getByRole("form", { name: "Upload a document" }));
-    fireEvent.click(form.getByRole("button", { name: "Upload" }));
-    expect((await form.findByRole("alert")).textContent).toBe("Choose a file.");
-    const names = form.getByLabelText("Document name") as HTMLSelectElement;
-    expect([...names.options].map((o) => o.textContent)).toEqual(["Protocol", "Consent", "Other name…"]);
-    fireEvent.change(names, { target: { value: "Consent" } });
-    fireEvent.change(form.getByLabelText("File"), { target: { files: [new File(["abc"], "icf.pdf")] } });
-    fireEvent.click(form.getByRole("button", { name: "Upload" }));
-    await form.findByText("Uploaded version 3 of Consent.");
-    expect(state.calls).toEqual([["upload", 9, 21, "Consent", "icf.pdf"]]);
+    expect(screen.getByRole("heading", { name: "Application and IRB notices" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Submitted documents" })).toBeTruthy();
+    expect(screen.getByText("1 of 2 required documents done", { exact: false })).toBeTruthy();
+    const empty = screen.getByLabelText("Upload a file: Consent");
+    fireEvent.change(empty, { target: { files: [new File([], "empty.pdf")] } });
+    expect((await screen.findByRole("alert")).textContent).toBe("The file is empty.");
+    fireEvent.change(empty, { target: { files: [new File(["abc"], "icf.pdf")] } });
+    await screen.findByText("Uploaded version 3 of Consent.");
+    expect(state.calls).toEqual([["upload", 9, 21, "Consent", "icf.pdf", 32]]);
+  });
+
+  it("marks a slot final or not needed, reopens one, and adds a document of the user's own", async () => {
+    await stepPage();
+    fireEvent.click(screen.getByRole("button", { name: "Mark final" })); // 신청서: a file, in progress
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["updateDocument", 9, 21, 33, { status: "final" }]));
+    fireEvent.click(screen.getByRole("button", { name: "Reopen" })); // Protocol: final
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["updateDocument", 9, 21, 31, { status: "needed" }]));
+    // Consent has no file: no "Mark final", only "Not needed".
+    const notNeeded = screen.getAllByRole("button", { name: "Not needed" });
+    expect(notNeeded).toHaveLength(2);
+    // Listed documents are never removed (marked not needed instead).
+    expect(screen.queryAllByRole("button", { name: "Remove" })).toHaveLength(0);
+    const form = within(screen.getByRole("form", { name: "Add a document" }));
+    fireEvent.click(form.getByRole("button", { name: "Add" }));
+    expect((await form.findByRole("alert")).textContent).toBe("Enter a document name.");
+    fireEvent.change(form.getByLabelText("Document name"), { target: { value: "심의 서류 바인더" } });
+    fireEvent.change(form.getByLabelText("Section"), { target: { value: "reference" } });
+    fireEvent.click(form.getByRole("button", { name: "Add" }));
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["addDocument", 9, 21, "심의 서류 바인더", "reference"]));
   });
 
   it("asks before removing the step", async () => {
@@ -606,7 +641,8 @@ describe("StepPageView", () => {
     await stepPage();
     expect(screen.getByText(/This step is removed/)).toBeTruthy();
     expect((screen.getByLabelText("Status") as HTMLSelectElement).disabled).toBe(true);
-    expect(screen.queryByRole("form", { name: "Upload a document" })).toBeNull();
+    expect(screen.queryByRole("form", { name: "Add a document" })).toBeNull();
+    expect(screen.queryByLabelText("Upload a file: Consent")).toBeNull();
     expect(screen.queryByRole("button", { name: "Draft for this step" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove step" })).toBeNull();
     expect(screen.getByRole("button", { name: "Download the latest Protocol" })).toBeTruthy(); // files stay downloadable
@@ -637,7 +673,8 @@ describe("StepPageView", () => {
     await stepPage();
     expect(screen.getByText(/You can read this pipeline but not change it/)).toBeTruthy();
     expect((screen.getByLabelText("Status") as HTMLSelectElement).disabled).toBe(true);
-    expect(screen.queryByRole("form", { name: "Upload a document" })).toBeNull();
+    expect(screen.queryByRole("form", { name: "Add a document" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mark final" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Draft for this step" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove step" })).toBeNull();
     expect(screen.getByRole("button", { name: "Download the latest Protocol" })).toBeTruthy();

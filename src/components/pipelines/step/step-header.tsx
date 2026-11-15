@@ -15,6 +15,8 @@ import {
   todaySeoul,
 } from "@/lib/api/pipelines";
 
+const SUBMITTED = "submitted"; // the seeded status key the server dates (submitted_on)
+
 /**
  * Name, number, subject, type, status, IRB result, dates and note of one step; read-only when
  * the step or pipeline is removed. After a result the page offers a matching status (owner:
@@ -27,6 +29,7 @@ export function StepHeader({
   readOnly,
   results = [],
   suggestedStatus = null,
+  missingRequired = [],
 }: {
   pipelineId: number;
   step: PipelineStep;
@@ -34,6 +37,7 @@ export function StepHeader({
   readOnly: boolean;
   results?: StepResult[];
   suggestedStatus?: string | null;
+  missingRequired?: string[]; // required documents not final and not marked not needed (phase C1)
 }) {
   const t = useTranslations("pipelines");
   const change = useChange();
@@ -140,7 +144,13 @@ export function StepHeader({
             className="rounded border px-2 py-1"
             disabled={readOnly || change.busy}
             value={step.status_key}
-            onChange={(e) => update({ status_key: e.target.value })}
+            onChange={(e) => {
+              const next = e.target.value;
+              // Phase C1 (D17): submitting with required documents not done is allowed, after a confirmation.
+              if (next === SUBMITTED && missingRequired.length > 0 && !window.confirm(t("confirmSubmitMissing", { names: missingRequired.join(", ") })))
+                return;
+              void update({ status_key: next });
+            }}
           >
             {choices.map((s) => (
               <option key={s.key} value={s.key}>

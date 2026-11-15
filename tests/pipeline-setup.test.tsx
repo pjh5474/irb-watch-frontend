@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "../messages/en.json";
 import { PipelineSetup } from "../src/components/admin/pipeline-setup";
 import { ApiError } from "../src/lib/api/client";
-import { moved, requiredDocsFromText, type StepType } from "../src/lib/api/pipeline";
+import { moved, repeatedName, type StepType } from "../src/lib/api/pipeline";
 
 const TYPE = (id: number, name: string): StepType => ({
   id,
@@ -16,7 +16,6 @@ const TYPE = (id: number, name: string): StepType => ({
   form_template_id: null,
   input_earlier_steps: true,
   input_board_documents: false,
-  required_documents: [],
   archived_at: null,
   updated_at: "",
   category: "other",
@@ -92,6 +91,22 @@ vi.mock("@/lib/api/pipeline", async () => {
       templates: async () => [{ hospital_id: null, step_type_ids: [1, 3], updated_at: "x" }],
       saveTemplate: async (hospitalId: number | null, ids: number[]) => state.calls.push(["saveTemplate", hospitalId, ids]),
       deleteTemplate: async () => {},
+      documentLists: async (typeId: number) => ({
+        step_type_id: typeId,
+        global_documents: [
+          { id: 101, name: "신청서", section: "application", origin: "draft", required: true },
+          { id: 102, name: "Protocol", section: "submission", origin: "library", required: true },
+        ],
+        hospitals: [],
+      }),
+      saveDocuments: async (typeId: number, hospitalId: number | null, rows: unknown) => {
+        state.calls.push(["saveDocuments", typeId, hospitalId, rows]);
+        return { step_type_id: typeId, global_documents: [], hospitals: [] };
+      },
+      deleteHospitalDocuments: async (typeId: number, hospitalId: number) => {
+        state.calls.push(["deleteHospitalDocuments", typeId, hospitalId]);
+        return { step_type_id: typeId, global_documents: [], hospitals: [] };
+      },
     },
   };
 });
@@ -122,10 +137,11 @@ afterEach(() => {
 });
 
 describe("helpers", () => {
-  it("moves items and parses required documents", () => {
+  it("moves items and finds a repeated document name", () => {
     expect(moved([1, 2, 3], 0, 1)).toEqual([2, 1, 3]);
     expect(moved([1, 2, 3], 0, -1)).toEqual([1, 2, 3]);
-    expect(requiredDocsFromText(" Protocol \n\nprotocol\nConsent   form\n")).toEqual(["Protocol", "Consent form"]);
+    expect(repeatedName([{ name: "Protocol" }, { name: " consent  form" }, { name: "protocol " }])).toBe("protocol");
+    expect(repeatedName([{ name: "A" }, { name: "B" }])).toBeNull();
   });
 });
 
@@ -154,7 +170,7 @@ describe("PipelineSetup", () => {
     expect(state.calls).toEqual([["saveTemplate", 4, [1]]]);
   });
 
-  it("creates a step type with guides, a ready form, inputs and required documents", async () => {
+  it("creates a step type with guides, a ready form and inputs", async () => {
     wrap();
     const types = await section("Step types");
     fireEvent.click(await within(types).findByRole("button", { name: "New step type" }));
@@ -166,7 +182,6 @@ describe("PipelineSetup", () => {
     expect(within(types).queryByRole("option", { name: "Draft form" })).toBeNull();
     fireEvent.change(form, { target: { value: "20" } });
     fireEvent.click(within(types).getByLabelText("The hospital's board documents"));
-    fireEvent.change(within(types).getByLabelText("Required documents"), { target: { value: "CIOMS\nCIOMS\nLetter" } });
     fireEvent.click(within(types).getByRole("button", { name: "Save" }));
     await within(types).findByText("Saved.");
     expect(state.calls).toEqual([
@@ -180,7 +195,6 @@ describe("PipelineSetup", () => {
           form_template_id: 20,
           input_earlier_steps: true,
           input_board_documents: true,
-          required_documents: ["CIOMS", "Letter"],
           category: "other",
           numbered: false,
         },
@@ -206,6 +220,43 @@ describe("PipelineSetup", () => {
       "update", 2,
       expect.objectContaining({ name: "Amendment", category: "amendment", numbered: true }),
     ]);
+  });
+
+  it("edits a step type's global document list and makes a hospital's own copy", async () => {
+    wrap();
+    const types = await section("Step types");
+    await within(types).findByText("Initial review");
+    fireEvent.click(within(types).getAllByRole("button", { name: "Documents" })[0]);
+    const editor = within(types);
+    await editor.findByDisplayValue("Protocol");
+    fireEvent.click(editor.getByRole("button", { name: "Add a document" }));
+    const names = editor.getAllByLabelText("Document") as HTMLInputElement[];
+    const sections = editor.getAllByLabelText("Section") as HTMLSelectElement[];
+    fireEvent.change(sections[2], { target: { value: "received" } });
+    // A document from the IRB is never required: its box is off and disabled.
+    expect((editor.getAllByLabelText("Required") as HTMLInputElement[])[2].disabled).toBe(true);
+    fireEvent.change(names[2], { target: { value: "protocol" } });
+    fireEvent.click(editor.getByRole("button", { name: "Save" }));
+    expect((await editor.findByRole("alert")).textContent).toBe("protocol is in the list twice.");
+    fireEvent.change(names[2], { target: { value: "통지서" } });
+    fireEvent.click(editor.getByRole("button", { name: "Move Protocol up" }));
+    fireEvent.click(editor.getByRole("button", { name: "Save" }));
+    await vi.waitFor(() =>
+      expect(state.calls).toContainEqual(["saveDocuments", 1, null, [
+        { id: 102, name: "Protocol", section: "submission", origin: "library", required: true },
+        { id: 101, name: "신청서", section: "application", origin: "draft", required: true },
+        { id: null, name: "통지서", section: "received", origin: "upload", required: false },
+      ]]),
+    );
+    // A hospital without its own list uses the global one; making its own copies the rows (new ids).
+    fireEvent.change(editor.getByLabelText("List"), { target: { value: "4" } });
+    fireEvent.click(await editor.findByRole("button", { name: "Make a list for this hospital" }));
+    await vi.waitFor(() =>
+      expect(state.calls).toContainEqual(["saveDocuments", 1, 4, [
+        { id: null, name: "신청서", section: "application", origin: "draft", required: true },
+        { id: null, name: "Protocol", section: "submission", origin: "library", required: true },
+      ]]),
+    );
   });
 
   it("edits the IRB results list", async () => {
@@ -240,7 +291,6 @@ describe("PipelineSetup", () => {
         guide_ids: [10],
         form_template_id: 20,
         input_board_documents: true,
-        required_documents: ["Protocol"],
       },
     ];
     wrap();
@@ -266,7 +316,6 @@ describe("PipelineSetup", () => {
           form_template_id: 20,
           input_earlier_steps: true,
           input_board_documents: true,
-          required_documents: ["Protocol"],
           category: "other",
           numbered: false,
         },

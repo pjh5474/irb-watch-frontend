@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { History, Note, errorText, stepKey, useChange } from "@/components/pipelines/shared";
-import { StepDocuments } from "@/components/pipelines/step/step-documents";
+import { StepDocuments, missingRequired } from "@/components/pipelines/step/step-documents";
 import { StepHeader } from "@/components/pipelines/step/step-header";
 import { StepSession } from "@/components/pipelines/step/step-session";
 import { StepDrafts } from "@/components/pipelines/step-drafts";
@@ -122,6 +122,7 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
       <StepHeader
         key={`header-${step.id}`} pipelineId={id} step={step} statuses={d.statuses} readOnly={readOnly}
         results={d.results ?? []} suggestedStatus={d.suggested_status ?? null}
+        missingRequired={missingRequired(d)}
       />
       {/* An older server sends no session fields: the section waits for CAL-1's backend. */}
       {d.session_kinds !== undefined && (

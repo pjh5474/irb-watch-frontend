@@ -14,7 +14,6 @@ export type StepType = {
   form_template_id: number | null;
   input_earlier_steps: boolean;
   input_board_documents: boolean;
-  required_documents: string[];
   archived_at: string | null;
   updated_at: string;
   category: StepCategory; // phase B2b
@@ -39,6 +38,25 @@ export type StepResultRow = {
 };
 
 export type PipelineTemplate = { hospital_id: number | null; step_type_ids: number[]; updated_at: string };
+
+/** Phase C1: one row of a step type's document list. A new step copies it as a slot. */
+export type DocSectionKey = "application" | "submission" | "received" | "reference";
+export const DOC_SECTION_KEYS: DocSectionKey[] = ["application", "received", "submission", "reference"];
+export const DOC_ORIGINS = ["draft", "upload", "library", "received"] as const;
+export type DocOrigin = (typeof DOC_ORIGINS)[number];
+/** Sections whose documents never count as required (the server clears the flag). */
+export const NEVER_REQUIRED: DocSectionKey[] = ["received", "reference"];
+export const MAX_DOCUMENT_KINDS = 50;
+
+export type DocumentKind = { id: number; name: string; section: DocSectionKey; origin: DocOrigin; required: boolean };
+/** id: a row of the same list to keep; null adds one. */
+export type DocumentKindInput = Omit<DocumentKind, "id"> & { id: number | null };
+/** A step type's lists: the global one and each hospital that has its own (an empty one = none). */
+export type DocumentLists = {
+  step_type_id: number;
+  global_documents: DocumentKind[];
+  hospitals: { hospital_id: number; documents: DocumentKind[] }[];
+};
 
 export const MAX_INSTRUCTIONS = 4000;
 
@@ -80,6 +98,19 @@ export const pipelineAdminApi = {
     ),
   deleteTemplate: (hospitalId: number) =>
     apiFetch<void>(`${base}/templates/hospitals/${hospitalId}`, { method: "DELETE" }),
+
+  documentLists: (typeId: number) => apiFetch<DocumentLists>(`${base}/step-types/${typeId}/documents`),
+  /** Saves one list whole (rows in order); for a hospital without a list this makes its own. */
+  saveDocuments: (typeId: number, hospitalId: number | null, rows: DocumentKindInput[]) =>
+    apiFetch<DocumentLists>(
+      hospitalId === null
+        ? `${base}/step-types/${typeId}/documents/global`
+        : `${base}/step-types/${typeId}/documents/hospitals/${hospitalId}`,
+      json("PUT", { documents: rows }),
+    ),
+  /** The hospital goes back to the global list for this step type. */
+  deleteHospitalDocuments: (typeId: number, hospitalId: number) =>
+    apiFetch<DocumentLists>(`${base}/step-types/${typeId}/documents/hospitals/${hospitalId}`, { method: "DELETE" }),
 };
 
 /** Moves the item at `index` one place up (-1) or down (+1); returns a new array. */
@@ -91,16 +122,13 @@ export function moved<T>(items: T[], index: number, by: -1 | 1): T[] {
   return copy;
 }
 
-/** One required document per line, trimmed, blanks and repeats (ignoring case) dropped. */
-export function requiredDocsFromText(text: string): string[] {
+/** The first repeated name of a document list (ignoring case and spacing), or null. */
+export function repeatedName(rows: { name: string }[]): string | null {
   const seen = new Set<string>();
-  const out: string[] = [];
-  for (const line of text.split("\n")) {
-    const name = line.trim().replace(/\s+/g, " ");
-    if (name && !seen.has(name.toLowerCase())) {
-      seen.add(name.toLowerCase());
-      out.push(name);
-    }
+  for (const r of rows) {
+    const key = r.name.trim().replace(/\s+/g, " ").toLowerCase();
+    if (key && seen.has(key)) return r.name.trim();
+    seen.add(key);
   }
-  return out;
+  return null;
 }

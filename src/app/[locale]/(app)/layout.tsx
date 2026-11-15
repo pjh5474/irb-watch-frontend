@@ -40,6 +40,7 @@ export default async function AppLayout({
           <Link href="/">{t("feed")}</Link>
           <Link href="/projects">{t("projects")}</Link>
           <Link href="/work">{t("work")}</Link>
+          <Link href="/calendar">{t("calendar")}</Link>
           {docgenEnabled() && <Link href="/drafts">{t("drafts")}</Link>}
           <Link href="/sources">{t("sources")}</Link>
           <Link href="/settings">{t("settings")}</Link>

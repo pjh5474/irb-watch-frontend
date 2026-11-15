@@ -1,3 +1,4 @@
+import type { IrbSession, SessionKind } from "@/lib/api/calendar";
 import { apiFetch } from "@/lib/api/client";
 import type { Draft, DraftJob, UploadFile } from "@/lib/api/docgen";
 import type { ProjectAccess } from "@/lib/api/projects";
@@ -50,6 +51,7 @@ export type PipelineStep = {
   label?: string; // the name as shown: "2차 변경심의"
   subject?: string; // what the step is about: "PT 2.0, CRF 1.1"
   result_key?: string | null; // the IRB's answer; null: none yet
+  target_session_id?: number | null; // CAL-1: the IRB meeting it aims for
 };
 
 /** The IRB's answer to a step (admin-edited list). needs_answer: offer a follow-up step. */
@@ -104,6 +106,12 @@ export type StepPage = {
   follow_up_types?: StepTypeRef[]; // live follow-up types, for "Add follow-up step"
   suggested_status?: string | null; // offered after a result; the user confirms
   needs_answer?: boolean; // the result asks for an answer: highlight "Add follow-up step"
+  // CAL-1
+  target_session?: IrbSession | null; // the meeting the step aims for
+  sessions?: IrbSession[]; // the hospital's upcoming sessions (proposals included, marked)
+  suggested_session_id?: number | null; // the hint; nothing is saved until the user picks
+  target_warning?: "cancelled" | "rejected" | "removed" | "unavailable" | null;
+  session_kinds?: SessionKind[];
 };
 
 /** One site's column on the hospital page: its live main steps. */
@@ -153,6 +161,7 @@ export type StepChange = Partial<{
   subject: string;
   sequence_no: number | null;
   result_key: string | null;
+  target_session_id: number | null;
 }>;
 
 /** One of the user's own files offered for an AI draft of a step (its newest version). */

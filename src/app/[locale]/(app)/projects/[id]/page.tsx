@@ -5,6 +5,7 @@ import { ProjectPipelines } from "@/components/pipelines/project-pipelines";
 import { type HospitalRow, ProjectHospitals, ProjectSettings } from "@/components/projects";
 import { ProjectAccessProvider } from "@/components/projects/project-access";
 import { ProjectMembers } from "@/components/projects/project-members";
+import { ProjectTasks } from "@/components/projects/project-tasks";
 import { Link } from "@/i18n/navigation";
 import { pageCount, parsePage } from "@/lib/paging";
 import { parseView, PROJECT_PAGE_SIZE, TIMELINE_TYPES } from "@/lib/projects";
@@ -203,6 +204,11 @@ export default async function ProjectPage({
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">{t("pipelinesTitle")}</h2>
         <ProjectPipelines projectId={projectId} hospitals={hospitals.map((h) => ({ id: h.id, name: h.name }))} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">{t("tasksTitle")}</h2>
+        <ProjectTasks projectId={projectId} />
       </section>
 
       <section className="flex flex-col gap-3">

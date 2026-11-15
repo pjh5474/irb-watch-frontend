@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { History, Note, errorText, stepKey, useChange } from "@/components/pipelines/shared";
 import { StepDocuments } from "@/components/pipelines/step/step-documents";
 import { StepHeader } from "@/components/pipelines/step/step-header";
+import { StepSession } from "@/components/pipelines/step/step-session";
 import { StepDrafts } from "@/components/pipelines/step-drafts";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -122,6 +123,10 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
         key={`header-${step.id}`} pipelineId={id} step={step} statuses={d.statuses} readOnly={readOnly}
         results={d.results ?? []} suggestedStatus={d.suggested_status ?? null}
       />
+      {/* An older server sends no session fields: the section waits for CAL-1's backend. */}
+      {d.session_kinds !== undefined && (
+        <StepSession key={`session-${step.id}`} pipelineId={id} page={d} readOnly={readOnly} />
+      )}
       <StepDocuments pipelineId={id} page={d} readOnly={readOnly} />
       {!d.parent && (
         <FollowUps key={`follow-${step.id}`} pipelineId={id} page={d} readOnly={readOnly} />

@@ -11,6 +11,7 @@ export function AdminTabs() {
   const tabs = [
     { href: "/admin/sources", label: t("tabs.sources"), active: pathname.startsWith("/admin/sources") },
     { href: "/admin/hospitals", label: t("tabs.hospitals"), active: pathname.startsWith("/admin/hospitals") },
+    { href: "/admin/sessions", label: t("tabs.sessions"), active: pathname.startsWith("/admin/sessions") },
     { href: "/admin/reviews", label: t("tabs.reviews"), active: pathname.startsWith("/admin/reviews") },
     // Guides and forms serve only the docs generator (hidden unless switched on, lib/features).
     ...(docgenEnabled()

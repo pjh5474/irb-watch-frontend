@@ -759,6 +759,8 @@
     "changed": "변경 {date}",
     "search": "검색",
     "searchPlaceholder": "출처 이름",
+    "documentSearchPlaceholder": "문서 제목",
+    "noMatches": "검색과 맞는 문서가 없습니다.",
     "show": "보기",
     "showAll": "전체",
     "showMembers": "회원 전용만",

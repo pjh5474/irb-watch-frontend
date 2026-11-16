@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { containsPattern } from "@/lib/like";
 
 // Reads for the draft form's document picker. They go straight to Supabase under the user's
 // own login: row-level security returns only sources and documents the user may read, the
@@ -82,7 +83,7 @@ export async function pickerDocuments(
   const ordered = <Q extends { order: (c: string, o: object) => Q; limit: (n: number) => Q }>(q: Q) =>
     q.order("posted_on", { ascending: false, nullsFirst: false }).order("id", { ascending: false }).limit(PICKER_LIMIT + 1);
 
-  const clean = search.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+  const clean = search.trim();
   if (!clean) {
     const { data, error } = await ordered(supabase.from("documents").select(columns).eq("source_id", sourceId));
     if (error) throw new Error(error.message);
@@ -90,7 +91,7 @@ export async function pickerDocuments(
     return { documents: rows.slice(0, PICKER_LIMIT), more: rows.length > PICKER_LIMIT };
   }
 
-  const pattern = `%${clean}%`;
+  const pattern = containsPattern(clean);
   const [titles, fileRows] = await Promise.all([
     ordered(supabase.from("documents").select(columns).eq("source_id", sourceId).ilike("title", pattern)),
     supabase

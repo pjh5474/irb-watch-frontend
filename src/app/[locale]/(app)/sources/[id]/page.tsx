@@ -3,28 +3,28 @@ import { notFound } from "next/navigation";
 import { Pagination } from "@/components/pagination";
 import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
-import { parsePage } from "@/lib/paging";
+import { containsPattern } from "@/lib/like";
+import { PAGE_SIZE, pageCount, pageHref, pageRange, parsePage } from "@/lib/paging";
 import { RECENT_DAYS, recentCutoff, wantsOnlyNew } from "@/lib/recent";
 import { dataMayBeOld, isManual, sourceHealth } from "@/lib/source-health";
 import { createClient } from "@/lib/supabase/server";
-
-// One source's documents stay 50 per page (the owner asked for 10 on the other lists).
-const PAGE_SIZE = 50;
 
 export default async function SourcePage({
   params,
   searchParams,
 }: {
   params: Promise<{ locale: string; id: string }>;
-  searchParams: Promise<{ page?: string; new?: string }>;
+  searchParams: Promise<{ page?: string; new?: string; q?: string }>;
 }) {
   const { locale, id } = await params;
-  const { page: pageParam, new: newParam } = await searchParams;
+  const { page: pageParam, new: newParam, q: qParam } = await searchParams;
   setRequestLocale(locale);
   if (!/^\d+$/.test(id)) notFound();
   const sourceId = Number(id);
   const page = parsePage(pageParam);
   const onlyNew = wantsOnlyNew(newParam);
+  const q = (qParam ?? "").trim().slice(0, 100);
+  const listQuery = { q: q || undefined, new: onlyNew ? "1" : undefined };
 
   const t = await getTranslations("sources");
   const format = await getFormatter();
@@ -69,7 +69,7 @@ export default async function SourcePage({
           {onlyNew ? t("viewingNew", { days: RECENT_DAYS }) : t("viewingAll")}
         </span>
         <Link
-          href={onlyNew ? `/sources/${sourceId}` : `/sources/${sourceId}?new=1`}
+          href={pageHref(`/sources/${sourceId}`, { q: q || undefined, new: onlyNew ? undefined : "1" }, "page", 1)}
           className="underline-offset-4 hover:underline"
         >
           {onlyNew ? t("showAllDocuments") : t("showOnlyNew", { days: RECENT_DAYS })}
@@ -113,25 +113,27 @@ export default async function SourcePage({
     );
   }
 
-  // Newest change first: latest_version_id only grows, so it orders documents by their most
-  // recent stored version (a silent re-save of a file also counts). Paged in the database.
-  const from = (page - 1) * PAGE_SIZE;
+  // Newest post first: the board date, then id. A first scan stores a board's posts in list
+  // order (newest first), so the newest post can have the smallest id and version id.
+  // Posts with no date go last. Same order as the draft picker. Paged in the database.
+  const [from, to] = pageRange(page, PAGE_SIZE);
   let docsQuery = supabase
     .from("documents")
     .select("id, title, posted_on, status, latest_version_id", { count: "exact" })
     .eq("source_id", sourceId);
   // "New" = first seen by IRB Watch within RECENT_DAYS (see lib/recent.ts).
   if (onlyNew) docsQuery = docsQuery.gte("first_seen_at", recentCutoff());
+  if (q) docsQuery = docsQuery.ilike("title", containsPattern(q));
   const { data: docs, count, error } = await docsQuery
-    .order("latest_version_id", { ascending: false, nullsFirst: false })
+    .order("posted_on", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false })
-    .range(from, from + PAGE_SIZE - 1);
+    .range(from, to);
 
   // A start row past the last one makes PostgREST answer 416 (PGRST103) with no count: that
   // is a page that does not exist, not a server failure.
   if (error?.code === "PGRST103") notFound();
   const total = count ?? 0;
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pages = pageCount(total, PAGE_SIZE);
   if (!error && page > pages) notFound();
 
   const latestIds = (docs ?? []).flatMap((d) => (d.latest_version_id === null ? [] : [d.latest_version_id]));
@@ -144,14 +146,39 @@ export default async function SourcePage({
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       {header}
 
+      <form method="get" className="flex flex-wrap items-end gap-3 text-sm" role="search">
+        {onlyNew ? <input type="hidden" name="new" value="1" /> : null}
+        <label className="flex flex-col gap-1">
+          {t("search")}
+          <input
+            name="q"
+            defaultValue={q}
+            placeholder={t("documentSearchPlaceholder")}
+            className="w-64 rounded border px-2 py-1"
+          />
+        </label>
+        <button type="submit" className="rounded border px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+          {t("apply")}
+        </button>
+        {q ? (
+          <Link
+            href={pageHref(`/sources/${sourceId}`, { new: onlyNew ? "1" : undefined }, "page", 1)}
+            className="px-1 py-1 underline-offset-4 hover:underline"
+          >
+            {t("reset")}
+          </Link>
+        ) : null}
+      </form>
+
       {error && (
         <p role="alert" className="text-sm text-red-600">
           {t("documentsLoadError")}
         </p>
       )}
+      {!error && <p className="text-sm opacity-70">{t("documentCount", { n: total })}</p>}
       {!error && total === 0 && (
         <p className="text-sm opacity-70">
-          {onlyNew ? t("noNewDocuments", { days: RECENT_DAYS }) : t("noDocuments")}
+          {q ? t("noMatches") : onlyNew ? t("noNewDocuments", { days: RECENT_DAYS }) : t("noDocuments")}
         </p>
       )}
 
@@ -193,7 +220,7 @@ export default async function SourcePage({
           page={page}
           pages={pages}
           pathname={`/sources/${sourceId}`}
-          query={{ new: onlyNew ? "1" : undefined }}
+          query={listQuery}
         />
       )}
     </main>

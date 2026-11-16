@@ -82,7 +82,7 @@ export default async function ProjectPage({
   } else if (readableIds.length === 0) {
     body = <p className="text-sm opacity-70">{t(hospitalIds.length ? "noReadableBoardsInProject" : "addSitesFirst")}</p>;
   } else if (view === "documents") {
-    // Newest change first, as on a source page (latest_version_id only grows).
+    // Newest stored version first (latest_version_id only grows).
     const { data: docs, count, error } = await supabase
       .from("documents")
       .select("id, title, source_id, status, posted_on, latest_version_id", { count: "exact" })

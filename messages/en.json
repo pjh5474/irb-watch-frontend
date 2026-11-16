@@ -759,6 +759,8 @@
     "changed": "Changed {date}",
     "search": "Search",
     "searchPlaceholder": "Source name",
+    "documentSearchPlaceholder": "Document title",
+    "noMatches": "No documents match this search.",
     "show": "Show",
     "showAll": "All",
     "showMembers": "Members-only only",

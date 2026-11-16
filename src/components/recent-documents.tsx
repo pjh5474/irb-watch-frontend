@@ -68,12 +68,15 @@ export async function RecentDocuments({
 
   const withNew = await Promise.all(
     withCount.slice(from, to + 1).map(async ({ source, count }) => {
+      // Newest post first, same as the source page. A scan stores the newest post first, so the
+      // oldest of this batch has the largest id. first_seen_at is one time for the whole scan,
+      // so ordering by it and then by id descending showed those old three.
       const newest = await supabase
         .from("documents")
         .select("id, title")
         .eq("source_id", source.id)
         .gte("first_seen_at", cutoff)
-        .order("first_seen_at", { ascending: false })
+        .order("posted_on", { ascending: false, nullsFirst: false })
         .order("id", { ascending: false })
         .limit(3);
       return { source, count, latest: newest.data ?? [], failed: Boolean(newest.error) };

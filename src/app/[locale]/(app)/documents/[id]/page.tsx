@@ -5,6 +5,8 @@ import { DiffView } from "@/components/diff-view";
 import { FileList, type FileRow } from "@/components/file-list";
 import { MarkdownText } from "@/components/markdown-text";
 import { SummaryPanel } from "@/components/summary-panel";
+import { VersionImages } from "@/components/version-images";
+import { isShownImage } from "@/lib/images";
 import { Link } from "@/i18n/navigation";
 import { getAccessState } from "@/lib/access";
 import { wordDiff } from "@/lib/diff";
@@ -78,8 +80,13 @@ export default async function DocumentPage({
     filename: f.filename,
     size_label: f.size_label,
     hasOriginal: f.storage_path !== null,
-    note: f.extract_note ?? (f.hash_only_reason ? t("textUnavailable") : null),
+    note:
+      f.hash_only_reason === "inline_image"
+        ? t("textImage")
+        : (f.extract_note ?? (f.hash_only_reason ? t("textUnavailable") : null)),
   }));
+  // Shown in the page: images of the post's text and attached image files that were stored.
+  const hasImages = (fileRows ?? []).some((f) => f.storage_path !== null && isShownImage(f.filename, f.hash_only_reason));
 
   const parts = previous ? wordDiff(body(previous.id), body(selected.id)) : null;
   const titleChanged = previous !== null && previous.title !== selected.title;
@@ -177,6 +184,13 @@ export default async function DocumentPage({
           </>
         )}
       </section>
+
+      {hasImages && (
+        <section>
+          <h2 className="mb-2 font-medium">{t("images")}</h2>
+          <VersionImages key={selected.id} versionId={selected.id} />
+        </section>
+      )}
 
       <section>
         <h2 className="mb-2 font-medium">{t("files")}</h2>

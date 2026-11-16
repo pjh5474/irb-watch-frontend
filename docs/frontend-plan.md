@@ -35,6 +35,8 @@ Update (document detail, step 7): `/documents/[id]` built: version picker (links
 
 Login bugs fixed 2026-11-09: message keys must not contain dots (breaks next-intl, page never hydrates); `allowedDevOrigins` for `127.0.0.1`; login form uses `method="post"` so credentials can never land in the URL.
 
+Update (2026-11-16, document lists): a source page lists newest posts first (`posted_on` desc, nulls last, then `id` desc), searches titles, and pages 10 at a time (`5f945b6`). The home recent-document cards use that order for their three titles (`70d4fcb`). A zip on the document file list is one closed card with in-zip search and pages (`35ee5d6`). The owner confirmed all three in the browser on 2026-11-16. A project's hospital document tab still orders by `latest_version_id`. Reasons and the rules that must not be undone: `docs/frontend-decisions.md` "Source page, recent cards, zip cards". `next-env.d.ts` stays gitignored and untracked (`19ab5b1`, not pushed).
+
 ## Steps
 1. **Scaffold.** Next.js, TypeScript strict, Tailwind, shadcn/ui, TanStack Query, Vitest, Playwright, i18n routing (ko default), `.env.example`.
 2. **Types.** Scripts: `openapi-typescript` against `https://irb-api.warwarsn.online/openapi.json`, `supabase gen types --linked`. Commit output.

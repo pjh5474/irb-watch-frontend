@@ -76,6 +76,40 @@ export type PipelineStep = {
   subject?: string; // what the step is about: "PT 2.0, CRF 1.1"
   result_key?: string | null; // the IRB's answer; null: none yet
   target_session_id?: number | null; // CAL-1: the IRB meeting it aims for
+  copied_from_step_id?: number | null; // phase C2: copied from a sibling site's step
+};
+
+/** The step a copied step came from (phase C2). removed: that step or its pipeline is removed. */
+export type StepOrigin = {
+  pipeline_id: number;
+  step_id: number;
+  step_label: string;
+  site_label: string; // "" for an unnamed site
+  removed: boolean;
+};
+
+export type CopyReason =
+  | "no_pipeline"
+  | "already_copied"
+  | "has_work"
+  | "copied_from_other"
+  | "too_many_steps"
+  | "too_many_documents";
+
+/**
+ * One sibling site in "Copy to other PIs" (phase C2): add a new step, fill the site's untouched
+ * step of the same type, or skip with a reason. After a copy, step_id is the step at that site.
+ */
+export type CopyTarget = {
+  site_id: number;
+  site_no: string;
+  pi_name: string;
+  pipeline_id: number | null;
+  action: "add" | "fill" | "skip";
+  reason: CopyReason | null;
+  step_id: number | null;
+  step_label: string;
+  notes: "meeting_not_copied"[];
 };
 
 /** The IRB's answer to a step (admin-edited list). needs_answer: offer a follow-up step. */
@@ -136,6 +170,7 @@ export type StepPage = {
   suggested_session_id?: number | null; // the hint; nothing is saved until the user picks
   target_warning?: "cancelled" | "rejected" | "removed" | "unavailable" | null;
   session_kinds?: SessionKind[];
+  copied_from?: StepOrigin | null; // phase C2
 };
 
 /** One site's column on the hospital page: its live main steps. */
@@ -247,6 +282,12 @@ export const pipelineApi = {
     apiFetch<PipelineStep>(`${step(id, stepId)}/restore`, { method: "POST" }),
 
   draftInputs: (id: number, stepId: number) => apiFetch<DraftInputs>(`${step(id, stepId)}/draft-inputs`),
+
+  /** What copying a main step to the other PIs of its hospital would do (nothing is written). */
+  copyTargets: (id: number, stepId: number) => apiFetch<CopyTarget[]>(`${step(id, stepId)}/copy-targets`),
+  /** All or nothing; 409 with the reasons when every chosen site is skipped. */
+  copyStep: (id: number, stepId: number, siteIds: number[]) =>
+    apiFetch<CopyTarget[]>(`${step(id, stepId)}/copy`, json("POST", { site_ids: siteIds })),
 
   /** Into a slot (documentId), or by name: that slot, else a new one of the user's in `section`. */
   upload: (id: number, stepId: number, name: string, file: UploadFile, documentId?: number, section?: DocSection) =>

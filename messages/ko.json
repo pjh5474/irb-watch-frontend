@@ -513,6 +513,33 @@
     "noResult": "결과 없음",
     "setStatusTo": "상태를 {status}(으)로 변경",
     "answerTo": "답변 대상:",
+    "copiedFrom": "복사 원본:",
+    "copiedFromRemoved": "지워짐",
+    "copy": {
+      "open": "다른 PI에게 복사…",
+      "title": "이 단계를 같은 병원의 다른 PI에게 복사",
+      "explain": "복사되는 것: 단계 종류, 변경 내용, 문서 목록(순서, 직접 추가한 문서, '필요 없음' 표시), 마감일, 목표 심의. 복사되지 않는 것: 파일, 초안, 메모, 상태, 결과, 제출일과 결정일. 상대 사이트에 아직 손대지 않은 같은 종류의 단계가 있으면 그 단계의 빈 칸만 채웁니다. 복사한 뒤 여기서 바꾼 내용은 따라가지 않습니다.",
+      "none": "이 프로젝트에 이 병원의 다른 PI가 없습니다.",
+      "unnamed": "이름 없는 사이트",
+      "add": "{step} 추가",
+      "fill": "기존 {step}에 채움 (빈 칸만)",
+      "reason": {
+        "no_pipeline": "파이프라인이 아직 없음: 먼저 시작하세요",
+        "already_copied": "이미 복사본이 있음: {step}",
+        "has_work": "{step}에 이미 작업한 내용이 있음",
+        "copied_from_other": "{step}은(는) 이미 다른 PI의 단계를 복사한 것임",
+        "too_many_steps": "파이프라인의 단계 수가 최대치임",
+        "too_many_documents": "{step}의 문서 수가 최대치를 넘음"
+      },
+      "meetingNotCopied": "목표 심의가 더 이상 유효하지 않아 복사하지 않음",
+      "submit": "{count}곳에 복사",
+      "pick": "PI를 하나 이상 선택하세요.",
+      "done": "{count}곳에 복사했습니다.",
+      "resultTitle": "복사 결과",
+      "skipped": "건너뜀",
+      "added": "{step} 추가함",
+      "filled": "{step} 채움"
+    },
     "followUps": "후속 단계",
     "needsAnswerNote": "IRB가 답변을 요청했습니다. 답변할 후속 단계를 추가하세요.",
     "noFollowUps": "후속 단계가 없습니다.",
@@ -657,7 +684,9 @@
       "document_restored": "문서 복원",
       "document_downloaded": "문서 받음",
       "draft_draft_started": "AI 초안 시작",
-      "draft_revision_started": "AI 수정 시작"
+      "draft_revision_started": "AI 수정 시작",
+      "step_copied": "다른 PI에게 단계 복사",
+      "step_copied_in": "다른 PI의 단계에서 복사됨"
     },
     "drafts": {
       "title": "AI 초안",

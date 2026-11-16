@@ -126,6 +126,9 @@ const state = vi.hoisted(() => ({
   sites: [] as unknown[],
   detail: null as unknown, // replaces the overview when set (phase B2b tests)
   hospital: null as unknown,
+  copyTargets: [] as unknown[],
+  copyResult: [] as unknown[],
+  copyError: null as unknown,
 }));
 
 vi.mock("@/lib/api/sites", async () => {
@@ -249,6 +252,15 @@ vi.mock("@/lib/api/pipelines", async () => {
       addDocument: call("addDocument"),
       updateDocument: call("updateDocument"),
       reorderDocuments: call("reorderDocuments"),
+      copyTargets: async (id: number, stepId: number) => {
+        state.calls.push(["copyTargets", id, stepId]);
+        return state.copyTargets;
+      },
+      copyStep: async (id: number, stepId: number, siteIds: number[]) => {
+        state.calls.push(["copyStep", id, stepId, siteIds]);
+        if (state.copyError) throw state.copyError;
+        return state.copyResult;
+      },
     },
   };
 });
@@ -277,9 +289,75 @@ beforeEach(() => {
   state.sites = [];
   state.detail = null;
   state.hospital = null;
+  state.copyTargets = [];
+  state.copyResult = [];
+  state.copyError = null;
 });
 
 afterEach(cleanup);
+
+describe("copy a step to other PIs (phase C2)", () => {
+  const target = (extra: object) => ({
+    site_id: 1001, site_no: "02", pi_name: "Lee", pipeline_id: 12, action: "fill", reason: null,
+    step_id: 40, step_label: "Initial review", notes: [], ...extra,
+  });
+
+  it("stays closed until asked, then previews and copies to the ticked sites", async () => {
+    state.copyTargets = [
+      target({}),
+      target({ site_id: 1002, site_no: "03", pi_name: "Park", pipeline_id: 13, action: "add", step_id: null, step_label: "2차 Initial review", notes: ["meeting_not_copied"] }),
+      target({ site_id: 1003, site_no: "04", pi_name: "Choi", pipeline_id: null, action: "skip", reason: "no_pipeline", step_id: null }),
+    ];
+    state.copyResult = [target({}), target({ site_id: 1002, site_no: "03", pi_name: "Park", pipeline_id: 13, action: "add", step_id: 77, step_label: "2차 Initial review" })];
+    wrap(<StepPageView id={9} stepId={21} />);
+    const open = await screen.findByRole("button", { name: "Copy to other PIs…" });
+    expect(state.calls.some((c) => (c as unknown[])[0] === "copyTargets")).toBe(false); // no extra call on load
+    fireEvent.click(open);
+    const box = within(await screen.findByRole("region", { name: "Copy this step to other PIs of this hospital" }));
+    await box.findByText("— fills its Initial review (empty fields only)");
+    expect(box.getByText("— adds 2차 Initial review")).toBeTruthy();
+    expect(box.getByText("(the target meeting is no longer valid and is not copied)")).toBeTruthy();
+    const skipped = box.getByRole("checkbox", { name: /04 · PI Choi/ }) as HTMLInputElement;
+    expect(skipped.disabled).toBe(true);
+    expect(box.getByText("— no pipeline yet: start it first")).toBeTruthy();
+    fireEvent.click(box.getByRole("checkbox", { name: /02 · PI Lee/ })); // untick one
+    fireEvent.click(box.getByRole("checkbox", { name: /02 · PI Lee/ })); // and tick it again
+    fireEvent.click(box.getByRole("button", { name: "Copy to 2 sites" }));
+    await vi.waitFor(() => expect(state.calls).toContainEqual(["copyStep", 9, 21, [1001, 1002]]));
+    expect(await box.findByText("Copied to 2 sites.")).toBeTruthy();
+    const result = within(box.getByRole("list", { name: "Copy result" }));
+    expect(result.getByRole("link", { name: "2차 Initial review added" }).getAttribute("href")).toBe("/pipelines/13/steps/77");
+    expect(result.getByRole("link", { name: "Initial review filled" }).getAttribute("href")).toBe("/pipelines/12/steps/40");
+  });
+
+  it("shows the server's reason when nothing could be copied", async () => {
+    state.copyTargets = [target({})];
+    state.copyError = new ApiError(409, "nothing was copied: 02 · PI Lee: already has a copy of this step");
+    wrap(<StepPageView id={9} stepId={21} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Copy to other PIs…" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy to 1 site" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("already has a copy");
+  });
+
+  it("says when the hospital has no other PI, and is not offered on follow-ups or read-only pages", async () => {
+    wrap(<StepPageView id={9} stepId={21} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Copy to other PIs…" }));
+    expect(await screen.findByText("This hospital has no other PI in this project.")).toBeTruthy();
+    cleanup();
+    state.page = { access: "read" };
+    wrap(<StepPageView id={9} stepId={21} />);
+    await screen.findByText("You can read this pipeline but not change it (support access).");
+    expect(screen.queryByRole("button", { name: "Copy to other PIs…" })).toBeNull();
+  });
+
+  it("links a copied step to the step it came from", async () => {
+    state.page = { copied_from: { pipeline_id: 8, step_id: 5, step_label: "Initial review", site_label: "01 · PI Kim", removed: true } };
+    wrap(<StepPageView id={9} stepId={21} />);
+    const link = await screen.findByRole("link", { name: "Initial review" });
+    expect(link.getAttribute("href")).toBe("/pipelines/8/steps/5");
+    expect(link.parentElement?.textContent).toBe("Copied from: 01 · PI Kim · Initial review (removed)");
+  });
+});
 
 describe("steps (phase B2b): follow-ups, numbers, subject, IRB result, hospital page", () => {
   const RESULTS = [

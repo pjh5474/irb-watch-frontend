@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { History, Note, errorText, stepKey, useChange } from "@/components/pipelines/shared";
+import { StepCopy } from "@/components/pipelines/step/step-copy";
 import { StepDocuments, missingRequired } from "@/components/pipelines/step/step-documents";
 import { StepHeader } from "@/components/pipelines/step/step-header";
 import { StepSession } from "@/components/pipelines/step/step-session";
@@ -119,6 +120,18 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
           </Link>
         </p>
       )}
+      {d.copied_from && (
+        <p className="text-sm">
+          {t("copiedFrom")} {d.copied_from.site_label && `${d.copied_from.site_label} · `}
+          <Link
+            href={`/pipelines/${d.copied_from.pipeline_id}/steps/${d.copied_from.step_id}`}
+            className="underline underline-offset-4"
+          >
+            {d.copied_from.step_label}
+          </Link>
+          {d.copied_from.removed && <span className="opacity-70"> ({t("copiedFromRemoved")})</span>}
+        </p>
+      )}
       <StepHeader
         key={`header-${step.id}`} pipelineId={id} step={step} statuses={d.statuses} readOnly={readOnly}
         results={d.results ?? []} suggestedStatus={d.suggested_status ?? null}
@@ -132,6 +145,7 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
       {!d.parent && (
         <FollowUps key={`follow-${step.id}`} pipelineId={id} page={d} readOnly={readOnly} />
       )}
+      {!d.parent && !readOnly && <StepCopy key={`copy-${step.id}`} pipelineId={id} stepId={step.id} />}
       {docgenEnabled() && (
         <StepDrafts
           key={`drafts-${step.id}`}

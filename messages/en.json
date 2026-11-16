@@ -513,6 +513,33 @@
     "noResult": "No result yet",
     "setStatusTo": "Set status to {status}",
     "answerTo": "Answer to:",
+    "copiedFrom": "Copied from:",
+    "copiedFromRemoved": "removed",
+    "copy": {
+      "open": "Copy to other PIs…",
+      "title": "Copy this step to other PIs of this hospital",
+      "explain": "Copied: the step type, subject, document list (order, your own documents, “not needed” marks), due date and target meeting. Not copied: files, drafts, notes, status, result and dates of submission or decision. A site's untouched step of the same type is filled where its fields are empty. Later changes here do not flow over.",
+      "none": "This hospital has no other PI in this project.",
+      "unnamed": "Unnamed site",
+      "add": "adds {step}",
+      "fill": "fills its {step} (empty fields only)",
+      "reason": {
+        "no_pipeline": "no pipeline yet: start it first",
+        "already_copied": "already has a copy: {step}",
+        "has_work": "its {step} already has work",
+        "copied_from_other": "its {step} is already a copy of another PI's step",
+        "too_many_steps": "its pipeline has the most steps allowed",
+        "too_many_documents": "{step} would have too many documents"
+      },
+      "meetingNotCopied": "the target meeting is no longer valid and is not copied",
+      "submit": "Copy to {count, plural, one {# site} other {# sites}}",
+      "pick": "Tick at least one PI.",
+      "done": "Copied to {count, plural, one {# site} other {# sites}}.",
+      "resultTitle": "Copy result",
+      "skipped": "Skipped",
+      "added": "{step} added",
+      "filled": "{step} filled"
+    },
     "followUps": "Follow-up steps",
     "needsAnswerNote": "The IRB asked for an answer. Add the follow-up step that answers it.",
     "noFollowUps": "No follow-up steps.",
@@ -657,7 +684,9 @@
       "document_restored": "Document restored",
       "document_downloaded": "Document downloaded",
       "draft_draft_started": "AI draft started",
-      "draft_revision_started": "AI revision started"
+      "draft_revision_started": "AI revision started",
+      "step_copied": "Step copied to other PIs",
+      "step_copied_in": "Step copied from another PI"
     },
     "drafts": {
       "title": "AI drafts",

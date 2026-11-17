@@ -33,6 +33,26 @@ export function tabLabel(board: Board, boards: Board[], kindName: (kind: string)
   return part || board.name;
 }
 
+const RBAY_MAIN = /^\/agency\/main\/[A-Za-z0-9_\-=]{8,128}$/;
+
+/** The hospital's start page on R-BAY, from the address of one of its R-BAY boards (stored as
+ * `https://www.r-bay.co.kr/agency/main/<hospital code>?board=NOTI`): the same address without the
+ * board. Null when no board has such an address; nothing else is ever turned into a link. */
+export function rbayMainUrl(boards: { adapter: string; url?: string | null }[]): string | null {
+  for (const b of boards) {
+    if (b.adapter !== "rbay" || !b.url) continue;
+    try {
+      const u = new URL(b.url);
+      if (u.protocol === "https:" && (u.hostname === "www.r-bay.co.kr" || u.hostname === "r-bay.co.kr") && RBAY_MAIN.test(u.pathname)) {
+        return `https://www.r-bay.co.kr${u.pathname}`;
+      }
+    } catch {
+      // not an address: try the next board
+    }
+  }
+  return null;
+}
+
 export type HospitalGroup<T> = { hospitalId: number | null; name: string; boards: T[] };
 
 /** Boards grouped by hospital (a board with no hospital stays its own group), sorted by name. */

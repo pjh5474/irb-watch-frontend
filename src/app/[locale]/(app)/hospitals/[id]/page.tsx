@@ -4,7 +4,7 @@ import { HospitalContacts } from "@/components/hospital-contacts";
 import { SourceDocuments } from "@/components/source-documents";
 import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
-import { orderBoards, pickBoard, tabLabel } from "@/lib/hospital-boards";
+import { orderBoards, pickBoard, rbayMainUrl, tabLabel } from "@/lib/hospital-boards";
 import { pageHref, parsePage } from "@/lib/paging";
 import { RECENT_DAYS, wantsOnlyNew } from "@/lib/recent";
 import { dataMayBeOld, isManual, sourceHealth } from "@/lib/source-health";
@@ -41,7 +41,7 @@ export default async function HospitalPage({
     // Explicit safe columns: row-level security cannot hide sources.config / last_scan_error.
     supabase
       .from("sources")
-      .select("id, name, adapter, requires_login, is_active, last_scan_at, last_scan_status, hospital_id, board_kind")
+      .select("id, name, url, adapter, requires_login, is_active, last_scan_at, last_scan_status, hospital_id, board_kind")
       .eq("hospital_id", hospitalId),
     getAccessState(supabase),
   ]);
@@ -58,6 +58,7 @@ export default async function HospitalPage({
 
   const boards = orderBoards(boardsResult.data ?? []);
   const current = pickBoard(boards, boardParam);
+  const rbayUrl = rbayMainUrl(boards);
   const locked = current ? isLocked(current, access) : false;
   const kindName = (kind: string) => t(`kind.${kind}` as "kind.other");
   const base = `/hospitals/${hospitalId}`;
@@ -69,7 +70,19 @@ export default async function HospitalPage({
         <Link href="/sources" className="text-sm underline-offset-4 hover:underline">
           ← {t("back")}
         </Link>
-        <h1 className="text-2xl font-semibold">{hospital.data.name}</h1>
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h1 className="text-2xl font-semibold">{hospital.data.name}</h1>
+          {rbayUrl && (
+            <a
+              href={rbayUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm underline underline-offset-4"
+            >
+              {t("openRbay")}
+            </a>
+          )}
+        </div>
       </header>
 
       <HospitalContacts hospitalId={hospitalId} canEdit={access.isAdmin} />

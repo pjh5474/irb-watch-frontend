@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { groupByHospital, orderBoards, pickBoard, tabLabel } from "../src/lib/hospital-boards";
+import { groupByHospital, orderBoards, pickBoard, rbayMainUrl, tabLabel } from "../src/lib/hospital-boards";
+
+describe("rbayMainUrl", () => {
+  const KEY = "ZDZxdUxtWlZqRTYwWjRocTUwRWY3UT09";
+  const board = (url: string | null, adapter = "rbay") => ({ adapter, url });
+
+  it("is the hospital's start page without the board parameter", () => {
+    expect(rbayMainUrl([board(`https://www.r-bay.co.kr/agency/main/${KEY}?board=NOTI`)])).toBe(
+      `https://www.r-bay.co.kr/agency/main/${KEY}`,
+    );
+    expect(rbayMainUrl([board(`https://r-bay.co.kr/agency/main/${KEY}`)])).toBe(`https://www.r-bay.co.kr/agency/main/${KEY}`);
+  });
+
+  it("takes the first board that has a valid address", () => {
+    expect(rbayMainUrl([board(null), board("not an address"), board(`https://www.r-bay.co.kr/agency/main/${KEY}?board=FORM_BOX`)])).toBe(
+      `https://www.r-bay.co.kr/agency/main/${KEY}`,
+    );
+  });
+
+  it("links nothing for another site, another path, another scheme or another adapter", () => {
+    expect(rbayMainUrl([])).toBeNull();
+    expect(rbayMainUrl([board(`https://evil.example.com/agency/main/${KEY}`)])).toBeNull();
+    expect(rbayMainUrl([board(`https://www.r-bay.co.kr.evil.com/agency/main/${KEY}`)])).toBeNull();
+    expect(rbayMainUrl([board("https://www.r-bay.co.kr/login")])).toBeNull();
+    expect(rbayMainUrl([board(`http://www.r-bay.co.kr/agency/main/${KEY}`)])).toBeNull();
+    expect(rbayMainUrl([board("javascript:alert(1)")])).toBeNull();
+    expect(rbayMainUrl([board(`https://www.r-bay.co.kr/agency/main/${KEY}`, "snuh")])).toBeNull();
+  });
+});
 import { type ContactsRow, shownField, staffGroups } from "../src/lib/api/contacts";
 
 const b = (id: number, kind: string, name = `H : ${id}`, hospital_id: number | null = 1) => ({

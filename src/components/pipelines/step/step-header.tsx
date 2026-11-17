@@ -3,17 +3,16 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Note, useChange } from "@/components/pipelines/shared";
+import { errorText } from "@/components/pipelines/shared";
 import {
   type PipelineStatus,
   type PipelineStep,
-  type StepChange,
   type StepResult,
   daysUntil,
-  pipelineApi,
   stepLabel,
   todaySeoul,
 } from "@/lib/api/pipelines";
+import { useStepAutosave } from "@/lib/use-step-autosave";
 
 const SUBMITTED = "submitted"; // the seeded status key the server dates (submitted_on)
 
@@ -40,22 +39,44 @@ export function StepHeader({
   missingRequired?: string[]; // required documents not final and not marked not needed (phase C1)
 }) {
   const t = useTranslations("pipelines");
-  const change = useChange();
-  const [note, setNote] = useState(step.note);
-  const [name, setName] = useState(step.name);
-  const [subject, setSubject] = useState(step.subject ?? "");
-  const [number, setNumber] = useState(step.sequence_no ? String(step.sequence_no) : "");
-  const status = statuses.find((s) => s.key === step.status_key);
-  const choices = statuses.filter((s) => !s.archived || s.key === step.status_key);
-  const resultChoices = results.filter((r) => !r.archived || r.key === step.result_key);
+  const save = useStepAutosave(pipelineId, step.id, step, (e) => errorText(e, t));
+  const initial = {
+    note: step.note,
+    name: step.name,
+    subject: step.subject ?? "",
+    number: step.sequence_no ? String(step.sequence_no) : "",
+  };
+  const [note, setNote] = useState(initial.note);
+  const [name, setName] = useState(initial.name);
+  const [subject, setSubject] = useState(initial.subject);
+  const [number, setNumber] = useState(initial.number);
+  const [numberError, setNumberError] = useState(false);
+  // What is shown is the user's latest pick until the server's copy has caught up.
+  const statusKey = save.value("status_key", step.status_key) ?? step.status_key;
+  const resultKey = save.value("result_key", step.result_key) ?? null;
+  const dates = {
+    due_on: save.value("due_on", step.due_on) ?? null,
+    submitted_on: save.value("submitted_on", step.submitted_on) ?? null,
+    decided_on: save.value("decided_on", step.decided_on) ?? null,
+  };
+  const status = statuses.find((s) => s.key === statusKey);
+  const choices = statuses.filter((s) => !s.archived || s.key === statusKey);
+  const resultChoices = results.filter((r) => !r.archived || r.key === resultKey);
   const suggested = suggestedStatus ? statuses.find((s) => s.key === suggestedStatus) : undefined;
-  const due = step.due_on && !status?.closed ? daysUntil(step.due_on, todaySeoul()) : null;
-  const update = (c: StepChange) => change.run(() => pipelineApi.updateStep(pipelineId, step.id, c), null);
-  const saveNumber = () => {
-    const value = number.trim() === "" ? null : Number(number);
-    if (value !== null && !(Number.isInteger(value) && value >= 1 && value <= 999))
-      return change.setMessage({ kind: "error", text: t("numberRange") });
-    if (value !== (step.sequence_no ?? null)) void update({ sequence_no: value });
+  const due = dates.due_on && !status?.closed ? daysUntil(dates.due_on, todaySeoul()) : null;
+  const typeNumber = (digits: string) => {
+    setNumber(digits);
+    const value = digits.trim() === "" ? null : Number(digits);
+    if (value !== null && !(Number.isInteger(value) && value >= 1 && value <= 999)) return setNumberError(true);
+    setNumberError(false);
+    if (value !== (step.sequence_no ?? null)) save.type({ sequence_no: value });
+  };
+  const resetTyped = () => {
+    setNote(initial.note);
+    setName(initial.name);
+    setSubject(initial.subject);
+    setNumber(initial.number);
+    setNumberError(false);
   };
 
   return (
@@ -74,8 +95,8 @@ export function StepHeader({
                 className="w-14 rounded border px-2 py-1 text-right text-xl font-semibold"
                 value={number}
                 placeholder="–"
-                onChange={(e) => setNumber(e.target.value.replace(/[^0-9]/g, ""))}
-                onBlur={saveNumber}
+                onChange={(e) => typeNumber(e.target.value.replace(/[^0-9]/g, ""))}
+                onBlur={save.flush}
               />
               <span className="text-xl font-semibold">{t("round")}</span>
             </label>
@@ -87,8 +108,11 @@ export function StepHeader({
               className="min-w-40 flex-1 rounded border px-2 py-1 text-xl font-semibold"
               value={name}
               maxLength={100}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => name.trim() && name.trim() !== step.name && update({ name: name.trim() })}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (e.target.value.trim() && e.target.value.trim() !== step.name) save.type({ name: e.target.value.trim() });
+              }}
+              onBlur={save.flush}
             />
           </>
         )}
@@ -106,8 +130,11 @@ export function StepHeader({
           value={subject}
           maxLength={200}
           placeholder={t("subjectHint")}
-          onChange={(e) => setSubject(e.target.value)}
-          onBlur={() => subject.trim() !== (step.subject ?? "") && update({ subject: subject.trim() })}
+          onChange={(e) => {
+            setSubject(e.target.value);
+            if (e.target.value.trim() !== (step.subject ?? "")) save.type({ subject: e.target.value.trim() });
+          }}
+          onBlur={save.flush}
         />
       </label>
 
@@ -116,9 +143,9 @@ export function StepHeader({
           {t("result")}
           <select
             className="rounded border px-2 py-1"
-            disabled={readOnly || change.busy}
-            value={step.result_key ?? ""}
-            onChange={(e) => update({ result_key: e.target.value || null })}
+            disabled={readOnly}
+            value={resultKey ?? ""}
+            onChange={(e) => save.pick({ result_key: e.target.value || null })}
           >
             <option value="">{t("noResult")}</option>
             {resultChoices.map((r) => (
@@ -130,7 +157,7 @@ export function StepHeader({
         </label>
         {!readOnly && suggested && (
           <div className="flex items-end">
-            <Button size="sm" variant="outline" disabled={change.busy} onClick={() => update({ status_key: suggested.key })}>
+            <Button size="sm" variant="outline" onClick={() => save.pick({ status_key: suggested.key })}>
               {t("setStatusTo", { status: suggested.label })}
             </Button>
           </div>
@@ -142,14 +169,14 @@ export function StepHeader({
           {t("status")}
           <select
             className="rounded border px-2 py-1"
-            disabled={readOnly || change.busy}
-            value={step.status_key}
+            disabled={readOnly}
+            value={statusKey}
             onChange={(e) => {
               const next = e.target.value;
               // Phase C1 (D17): submitting with required documents not done is allowed, after a confirmation.
               if (next === SUBMITTED && missingRequired.length > 0 && !window.confirm(t("confirmSubmitMissing", { names: missingRequired.join(", ") })))
                 return;
-              void update({ status_key: next });
+              save.pick({ status_key: next });
             }}
           >
             {choices.map((s) => (
@@ -165,9 +192,9 @@ export function StepHeader({
             <input
               type="date"
               className="rounded border px-2 py-1"
-              disabled={readOnly || change.busy}
-              value={step[key] ?? ""}
-              onChange={(e) => update({ [key]: e.target.value || null })}
+              disabled={readOnly}
+              value={dates[key] ?? ""}
+              onChange={(e) => save.pick({ [key]: e.target.value || null })}
             />
           </label>
         ))}
@@ -182,13 +209,61 @@ export function StepHeader({
           maxLength={4000}
           disabled={readOnly}
           value={note}
-          onChange={(e) => setNote(e.target.value)}
-          onBlur={() => note !== step.note && update({ note })}
+          onChange={(e) => {
+            setNote(e.target.value);
+            if (e.target.value !== step.note) save.type({ note: e.target.value });
+          }}
+          onBlur={save.flush}
         />
       </div>
-      <Note message={change.message} />
+      {numberError && (
+        <p role="alert" className="text-sm text-red-600">
+          {t("numberRange")}
+        </p>
+      )}
+      {!readOnly && <SaveStatus save={save} resetTyped={resetTyped} />}
     </section>
   );
+}
+
+/** Saving, saved, or not saved with the reason, a retry and a way to drop the unsaved values. A
+ * failed save never looks like no change. */
+function SaveStatus({
+  save,
+  resetTyped,
+}: {
+  save: ReturnType<typeof useStepAutosave>;
+  resetTyped: () => void;
+}) {
+  const t = useTranslations("pipelines");
+  if (save.phase === "saving") {
+    return (
+      <p role="status" className="text-xs opacity-70">
+        {t("autoSaving")}
+      </p>
+    );
+  }
+  if (save.phase === "saved") {
+    return (
+      <p role="status" className="text-xs text-green-700 dark:text-green-400">
+        {t("autoSaved")}
+      </p>
+    );
+  }
+  if (save.phase === "failed") {
+    return (
+      <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-red-600">
+        <span>{t("autoNotSaved", { reason: save.error ?? "" })}</span>
+        <Button size="sm" variant="outline" onClick={save.flush}>
+          {t("autoRetry")}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => save.discard(resetTyped)}>
+          {t("autoDiscard")}
+        </Button>
+      </div>
+    );
+  }
+  return null;
 }
 
 /** "3 days overdue" / "due in 5 days"; nothing without a due date or for a closed step. */

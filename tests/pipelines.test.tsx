@@ -435,7 +435,7 @@ describe("steps (phase B2b): follow-ups, numbers, subject, IRB result, hospital 
     state.page = { step: { ...INITIAL, sequence_no: 2, label: "2차 Initial review", subject: "" }, results: RESULTS };
     wrap(<StepPageView id={9} stepId={21} />);
     const number = await screen.findByLabelText("Round number");
-    const status = screen.getByLabelText("Status") as HTMLSelectElement; // disabled while a change is saved
+    const status = screen.getByLabelText("Status") as HTMLSelectElement; // never disabled by a save (auto-save)
     const idle = () => vi.waitFor(() => expect(status.disabled).toBe(false));
     fireEvent.change(number, { target: { value: "3" } });
     fireEvent.blur(number);
@@ -659,9 +659,10 @@ describe("StepPageView", () => {
     fireEvent.change(screen.getByLabelText("Status"), { target: { value: "submitted" } });
     expect(ask).toHaveBeenCalledWith(expect.stringContaining("Consent"));
     expect(state.calls).toEqual([]); // cancelled: nothing saved
-    // One change at a time: the controls are disabled while a change is saved.
+    // Auto-save: the controls stay usable while a change is saved; saves go out one at a time.
     fireEvent.change(screen.getByLabelText("Status"), { target: { value: "submitted" } });
-    await vi.waitFor(() => expect((screen.getByLabelText("Due date") as HTMLInputElement).disabled).toBe(false));
+    expect((screen.getByLabelText("Due date") as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByLabelText("Status") as HTMLSelectElement).value).toBe("submitted"); // shown at once
     fireEvent.change(screen.getByLabelText("Due date"), { target: { value: "2026-12-31" } });
     await vi.waitFor(() =>
       expect(state.calls).toEqual([

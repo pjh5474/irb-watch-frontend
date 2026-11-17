@@ -8,17 +8,20 @@ import { HOSPITALS_KEY } from "@/components/admin/hospital-admin";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { adminApi } from "@/lib/api/admin";
+import { RBAY_BOARD_CHOICES } from "@/lib/rbay-boards";
 import { useSingleFlight } from "@/lib/use-single-flight";
 
 /** The "add a source" form in a dialog, so the list of sources starts at the top of the page.
  * Two kinds: a site that is scanned (its web address), or a manual source for a hospital with
  * no e-IRB site, whose documents an admin uploads by hand. */
-export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (name: string) => void }) {
+export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (message: string) => void }) {
   const t = useTranslations("admin");
   const queryClient = useQueryClient();
   const add = useSingleFlight();
-  const [kind, setKind] = useState<"site" | "manual">("site");
+  const [kind, setKind] = useState<"site" | "manual" | "rbay">("site");
   const [form, setForm] = useState({ name: "", url: "", login: "", membersOnly: false, hospital: "" });
+  // The one-step R-BAY form: the first three boards are ticked (notices, forms, regulations).
+  const [rbay, setRbay] = useState({ name: "", address: "", login: "", boards: RBAY_BOARD_CHOICES.map((b) => b.code) as string[] });
   const [error, setError] = useState<string | null>(null);
   const first = useRef<HTMLInputElement>(null);
   // "" = automatic: the hospital of another board on the same site, else one named like the board.
@@ -42,8 +45,23 @@ export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onA
       setError(t("hospitals.needForMembersOnly"));
       return;
     }
+    if (kind === "rbay" && rbay.boards.length === 0) {
+      setError(t("rbayPickBoard"));
+      return;
+    }
     await add.run(async () => {
       try {
+        if (kind === "rbay") {
+          const done = await adminApi.createRbayHospital({
+            address: rbay.address.trim(),
+            hospital_name: rbay.name,
+            login_user: rbay.login.trim(),
+            boards: rbay.boards,
+          });
+          await queryClient.invalidateQueries({ queryKey: HOSPITALS_KEY });
+          onAdded(t("rbayAdded", { name: rbay.name.trim(), n: done.sources.length }));
+          return;
+        }
         if (kind === "manual") {
           await adminApi.createManualSource({ name: form.name, members_only: form.membersOnly, hospital_id: hospitalId });
         } else {
@@ -55,7 +73,7 @@ export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onA
           });
         }
         await queryClient.invalidateQueries({ queryKey: HOSPITALS_KEY });
-        onAdded(form.name);
+        onAdded(t("sourceAddedNamed", { name: form.name }));
       } catch (e) {
         setError(adminErrorText(e, t));
       }
@@ -85,6 +103,13 @@ export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onA
               </span>
             </label>
             <label className="flex items-start gap-2">
+              <input type="radio" className="mt-1" checked={kind === "rbay"} onChange={() => setKind("rbay")} />
+              <span>
+                {t("kindRbay")}
+                <span className="block text-xs opacity-70">{t("kindRbayHint")}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
               <input type="radio" className="mt-1" checked={kind === "manual"} onChange={() => setKind("manual")} />
               <span>
                 {t("kindManual")}
@@ -92,17 +117,75 @@ export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onA
               </span>
             </label>
           </fieldset>
-          <label className="flex flex-col gap-1 text-sm">
-            {t("name")}
-            <input
-              ref={first}
-              className="rounded border px-3 py-2"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-          </label>
-          {kind === "site" ? (
+          {kind === "rbay" ? (
+            <>
+              <label className="flex flex-col gap-1 text-sm">
+                {t("rbayHospitalName")}
+                <input
+                  ref={first}
+                  className="rounded border px-3 py-2"
+                  value={rbay.name}
+                  onChange={(e) => setRbay({ ...rbay, name: e.target.value })}
+                  required
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                {t("rbayAddress")}
+                <input
+                  className="rounded border px-3 py-2"
+                  value={rbay.address}
+                  onChange={(e) => setRbay({ ...rbay, address: e.target.value })}
+                  placeholder="https://www.r-bay.co.kr/agency/main/..."
+                  required
+                />
+                <span className="text-xs opacity-70">{t("rbayAddressHint")}</span>
+              </label>
+              <fieldset className="flex flex-col gap-1 text-sm">
+                <legend className="mb-1">{t("rbayBoards")}</legend>
+                <div className="flex flex-wrap gap-4">
+                  {RBAY_BOARD_CHOICES.map((b) => (
+                    <label key={b.code} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={rbay.boards.includes(b.code)}
+                        onChange={(e) =>
+                          setRbay({
+                            ...rbay,
+                            boards: e.target.checked ? [...rbay.boards, b.code] : rbay.boards.filter((c) => c !== b.code),
+                          })
+                        }
+                      />
+                      {b.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <label className="flex flex-col gap-1 text-sm">
+                {t("rbayLogin")}
+                <input
+                  className="rounded border px-3 py-2"
+                  value={rbay.login}
+                  onChange={(e) => setRbay({ ...rbay, login: e.target.value })}
+                  placeholder="owner"
+                  autoComplete="off"
+                  required
+                />
+                <span className="text-xs opacity-70">{t("rbayLoginHint")}</span>
+              </label>
+            </>
+          ) : (
+            <label className="flex flex-col gap-1 text-sm">
+              {t("name")}
+              <input
+                ref={first}
+                className="rounded border px-3 py-2"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+              />
+            </label>
+          )}
+          {kind === "rbay" ? null : kind === "site" ? (
             <>
               <label className="flex flex-col gap-1 text-sm">
                 {t("url")}
@@ -141,7 +224,7 @@ export function AddSourceDialog({ onClose, onAdded }: { onClose: () => void; onA
               </span>
             </label>
           )}
-          <label className="flex flex-col gap-1 text-sm">
+          <label className={`flex flex-col gap-1 text-sm ${kind === "rbay" ? "hidden" : ""}`}>
             {t("hospitals.moveTo")}
             <select
               className="rounded border px-2 py-1.5"

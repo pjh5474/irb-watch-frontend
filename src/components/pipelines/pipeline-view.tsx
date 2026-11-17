@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { ContactsToggle } from "@/components/hospital-contacts";
 import { History, Note, detailKey, errorText, useChange } from "@/components/pipelines/shared";
 import { DueBadge } from "@/components/pipelines/step/step-header";
 import { SiteDetails } from "@/components/sites/site-details";
@@ -80,6 +81,7 @@ export function PipelineView({ id }: { id: number }) {
           </div>
         )}
         <Note message={change.message} />
+        <ContactsToggle hospitalId={p.hospital_id} />
       </header>
 
       {live.length === 0 && <p className="text-sm opacity-70">{t("noSteps")}</p>}

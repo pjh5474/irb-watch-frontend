@@ -570,6 +570,29 @@ export type Database = {
         }
         Relationships: []
       }
+      hospital_contacts: {
+        // The browser reads these columns only; error_detail and updated_by stay with the server.
+        Row: {
+          hospital_id: number
+          scanned_phone: string
+          scanned_fax: string
+          scanned_email: string
+          manual_phone: string | null
+          manual_fax: string | null
+          manual_email: string | null
+          check_status: "never" | "ok" | "failed"
+          checked_at: string | null
+          last_ok_at: string | null
+          error_kind: "login_rejected" | "site_unavailable" | "layout_changed" | "other" | null
+          updated_at: string
+          staff: Json
+          staff_status: "never" | "none" | "ok" | "failed"
+          staff_error_kind: "login_rejected" | "site_unavailable" | "layout_changed" | "other" | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       mail_claims: {
         Row: {
           created_at: string

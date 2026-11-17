@@ -29,6 +29,8 @@ export type AdminSource = {
   board_kind: BoardKind;
 };
 
+export type RbayHospitalResult = { hospital_id: number; hospital_made: boolean; sources: AdminSource[] };
+
 export const BOARD_KINDS = ["notice", "forms", "regulations", "other"] as const;
 export type BoardKind = (typeof BOARD_KINDS)[number];
 
@@ -86,6 +88,14 @@ export const adminApi = {
     hospital_id?: number | null;
     board_kind?: BoardKind | null;
   }) => apiFetch<AdminSource>("/admin/sources", json("POST", body)),
+  // One R-BAY hospital's boards in one step: one source per board under one hospital.
+  createRbayHospital: (body: {
+    address: string;
+    hospital_name: string;
+    login_user: string;
+    boards: string[];
+    ai_enabled?: boolean | null;
+  }) => apiFetch<RbayHospitalResult>("/admin/sources/rbay-hospital", json("POST", body)),
   // A source an admin fills by hand (no e-IRB site); never scanned.
   createManualSource: (body: {
     name: string;

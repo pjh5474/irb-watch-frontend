@@ -2,9 +2,9 @@ import { getFormatter, getTranslations, setRequestLocale } from "next-intl/serve
 import { Pagination } from "@/components/pagination";
 import { Link } from "@/i18n/navigation";
 import { getAccessState, isLocked } from "@/lib/access";
+import { groupByHospital, tabLabel } from "@/lib/hospital-boards";
 import { clampPage, pageCount, pageRange, parsePage } from "@/lib/paging";
 import { myProjectsFilter } from "@/lib/project-scope";
-import { siteOf } from "@/lib/site-groups";
 import { dataMayBeOld, isManual, sourceHealth } from "@/lib/source-health";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,6 +13,7 @@ const GRID_PAGE_SIZE = 24;
 const SHOWS = ["members", "attention", "project"] as const;
 type Show = (typeof SHOWS)[number] | "";
 
+/** One card per hospital (owner, 2026-11-17): its boards inside, opening the hospital page. */
 export default async function SourcesPage({
   params,
   searchParams,
@@ -24,26 +25,30 @@ export default async function SourcesPage({
   const { page: pageParam, q: qParam, show: showParam, project: projectParam } = await searchParams;
   setRequestLocale(locale);
   const t = await getTranslations("sources");
+  const th = await getTranslations("hospitalPage");
   const format = await getFormatter();
   const supabase = await createClient();
   const q = (qParam ?? "").trim().slice(0, 100);
   const show: Show = (SHOWS as readonly string[]).includes(showParam ?? "") ? (showParam as Show) : "";
   const projectId = projectParam && /^\d+$/.test(projectParam) ? Number(projectParam) : null;
 
-  // All readable sources at once (a few hundred small rows), so search and the filters below
-  // work on the whole list. Explicit safe columns: RLS cannot hide sources.config or
-  // last_scan_error from users.
-  const { data: all, error } = await supabase
-    .from("sources")
-    .select("id, name, url, adapter, requires_login, is_active, last_scan_at, last_scan_status, hospital_id")
-    .order("name");
+  // All readable boards and the hospital names at once (a few hundred small rows), so search and
+  // the filters below work on the whole list. Explicit safe columns: row-level security cannot
+  // hide sources.config or last_scan_error from users.
+  const [{ data: all, error }, { data: hospitalRows, error: hospitalsError }] = await Promise.all([
+    supabase
+      .from("sources")
+      .select("id, name, url, adapter, requires_login, is_active, last_scan_at, last_scan_status, hospital_id, board_kind")
+      .order("name"),
+    supabase.from("hospitals").select("id, name"),
+  ]);
   const access = await getAccessState(supabase);
   const { data: projects } = await supabase
     .from("projects")
     .select("id, name, project_hospitals(hospital_id)")
     .or(await myProjectsFilter(supabase))
     .order("name");
-  if (!access) {
+  if (!access || hospitalsError) {
     return (
       <main className="mx-auto w-full max-w-6xl p-6">
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
@@ -54,29 +59,32 @@ export default async function SourcesPage({
     );
   }
 
-  // A project lists hospitals; a board is "in the project" when its hospital is.
+  const hospitalNames = new Map((hospitalRows ?? []).map((h) => [h.id, h.name]));
+  // A project lists hospitals; a hospital is "in the project" when the project lists it.
   const projectHospitals = new Set(
     (projects ?? []).find((p) => p.id === projectId)?.project_hospitals.map((l) => l.hospital_id) ?? [],
   );
-  const inProject = new Set((all ?? []).filter((s) => projectHospitals.has(s.hospital_id)).map((s) => s.id));
   const term = q.toLowerCase();
-  const matching = (all ?? []).filter((s) => {
-    if (term && !s.name.toLowerCase().includes(term)) return false;
-    if (show === "members" && !s.requires_login) return false;
-    if (show === "attention" && !dataMayBeOld(sourceHealth(s).level)) return false;
-    if (show === "project" && !inProject.has(s.id)) return false;
+  const groups = groupByHospital(all ?? [], hospitalNames).filter((g) => {
+    if (term && !g.name.toLowerCase().includes(term) && !g.boards.some((b) => b.name.toLowerCase().includes(term)))
+      return false;
+    if (show === "members" && !g.boards.some((b) => b.requires_login)) return false;
+    if (show === "attention" && !g.boards.some((b) => dataMayBeOld(sourceHealth(b).level))) return false;
+    if (show === "project" && !(g.hospitalId !== null && projectHospitals.has(g.hospitalId))) return false;
     return true;
   });
-  const pages = pageCount(matching.length, GRID_PAGE_SIZE);
+  const totalGroups = groupByHospital(all ?? [], hospitalNames).length;
+  const pages = pageCount(groups.length, GRID_PAGE_SIZE);
   const page = clampPage(parsePage(pageParam), pages);
   const [from, to] = pageRange(page, GRID_PAGE_SIZE);
-  const visible = matching.slice(from, to + 1);
+  const visible = groups.slice(from, to + 1);
 
-  // Document counts only for the cards on this page. null = locked or the count failed; the card
-  // says which, so a failure never reads as "0".
+  // Document counts only for the boards of the cards on this page. null = locked or the count
+  // failed; the card says which, so a failure never reads as "0".
+  const boardsOnPage = visible.flatMap((g) => g.boards);
   const counts = new Map<number, number | null>(
     await Promise.all(
-      visible.map(async (s) => {
+      boardsOnPage.map(async (s) => {
         if (isLocked(s, access)) return [s.id, null] as const;
         const { count, error: countError } = await supabase
           .from("documents")
@@ -92,10 +100,11 @@ export default async function SourcesPage({
     show: show || undefined,
     project: show === "project" && projectId ? String(projectId) : undefined,
   };
+  const kindName = (kind: string) => th(`kind.${kind}` as "kind.other");
 
   return (
     <main className="mx-auto w-full max-w-6xl p-6">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
+      <h1 className="text-2xl font-semibold">{t("hospitals")}</h1>
 
       {/* A plain GET form: works without JavaScript and keeps the filters in the address. */}
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3 text-sm" role="search">
@@ -140,63 +149,73 @@ export default async function SourcesPage({
         )}
       </form>
 
-      {error && (
+      {(error || hospitalsError) && (
         <p role="alert" className="mt-6 text-sm text-red-600">
           {t("loadError")}
         </p>
       )}
-      {!error && (
-        <p className="mt-4 text-sm opacity-70">{t("found", { n: matching.length, total: (all ?? []).length })}</p>
-      )}
+      {!error && <p className="mt-4 text-sm opacity-70">{t("found", { n: groups.length, total: totalGroups })}</p>}
       {!error && (all ?? []).length === 0 && <p className="mt-2 text-sm opacity-70">{t("empty")}</p>}
 
       <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {visible.map((source, index) => {
-          const locked = isLocked(source, access);
-          const count = counts.get(source.id) ?? null;
-          const site = siteOf(source.url);
+        {visible.map((group, index) => {
+          const href = group.hospitalId !== null ? `/hospitals/${group.hospitalId}` : `/sources/${group.boards[0].id}`;
+          const readable = group.boards.filter((b) => !isLocked(b, access));
+          const known = readable.map((b) => counts.get(b.id)).filter((c): c is number => typeof c === "number");
+          // A count that failed for a readable board is not a number: say "unknown", never a short total.
+          const countFailed = readable.some((b) => counts.get(b.id) === null);
+          const total = known.reduce((a, b) => a + b, 0);
+          const allLocked = readable.length === 0;
+          const lastScan = group.boards.map((b) => b.last_scan_at).filter((d): d is string => Boolean(d)).sort().at(-1);
+          const allManual = group.boards.every((b) => isManual(b));
           return (
             <li
-              key={source.id}
+              key={group.hospitalId ?? `board-${group.boards[0].id}`}
               className="reveal flex flex-col gap-2 rounded border p-4"
               style={{ "--i": index } as React.CSSProperties}
             >
               <h2 className="font-medium leading-snug">
-                <Link href={`/sources/${source.id}`} className="underline-offset-4 hover:underline">
-                  {source.name}
+                <Link href={href} className="underline-offset-4 hover:underline">
+                  {group.name}
                 </Link>
               </h2>
-              <p className="text-xs opacity-60">
-                {isManual(source) ? t("manualTag") : site.kind === "rbay" ? "R-BAY" : site.fallback}
-              </p>
+              <p className="text-xs opacity-60">{t("hospitalBoards", { n: group.boards.length })}</p>
+              <ul className="flex flex-wrap gap-1 text-xs">
+                {group.boards.map((b) => (
+                  <li key={b.id}>
+                    <Link
+                      href={group.hospitalId !== null ? `/hospitals/${group.hospitalId}?board=${b.id}` : `/sources/${b.id}`}
+                      className="rounded bg-neutral-100 px-2 py-0.5 hover:underline dark:bg-neutral-800"
+                    >
+                      {tabLabel(b, group.boards, kindName)}
+                      {isLocked(b, access) ? " 🔒" : ""}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
               <div className="flex flex-wrap items-center gap-1 text-xs">
-                {locked ? (
+                {allLocked ? (
                   <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800">{t("locked")}</span>
                 ) : (
                   <span className="opacity-70">
-                    {count === null ? t("countUnknown") : t("documentCount", { n: count })}
+                    {countFailed ? t("countUnknown") : t("hospitalDocuments", { n: total })}
                   </span>
                 )}
-                {source.requires_login && !locked && (
-                  <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
-                    {t("membersOnly")}
-                  </span>
-                )}
-                {!source.is_active && (
+                {group.boards.some((b) => !b.is_active) && (
                   <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-700">{t("inactive")}</span>
                 )}
-                {dataMayBeOld(sourceHealth(source).level) && (
+                {group.boards.some((b) => dataMayBeOld(sourceHealth(b).level)) && (
                   <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
                     {t("mayBeOld")}
                   </span>
                 )}
               </div>
               <p className="mt-auto text-xs opacity-70">
-                {source.last_scan_at
-                  ? t(isManual(source) ? "manualUpdated" : "lastScan", {
-                      date: format.dateTime(new Date(source.last_scan_at), { dateStyle: "medium", timeStyle: "short" }),
+                {lastScan
+                  ? t(allManual ? "manualUpdated" : "lastScan", {
+                      date: format.dateTime(new Date(lastScan), { dateStyle: "medium", timeStyle: "short" }),
                     })
-                  : t(isManual(source) ? "manualEmpty" : "neverScanned")}
+                  : t(allManual ? "manualEmpty" : "neverScanned")}
               </p>
             </li>
           );

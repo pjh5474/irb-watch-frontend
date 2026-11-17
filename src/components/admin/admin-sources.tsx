@@ -220,9 +220,9 @@ export function AdminSources() {
       {adding && (
         <AddSourceDialog
           onClose={() => setAdding(false)}
-          onAdded={(name) => {
+          onAdded={(text) => {
             setAdding(false);
-            setMessage({ kind: "ok", text: t("sourceAddedNamed", { name }) });
+            setMessage({ kind: "ok", text });
             void refresh();
           }}
         />

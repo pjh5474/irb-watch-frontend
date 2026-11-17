@@ -75,10 +75,28 @@ describe("HospitalContacts", () => {
     expect(screen.getByText(/Read from R-BAY on/)).toBeTruthy();
   });
 
-  it("never turns contact text into a link", async () => {
+  it("links only a real email address (mailto, new tab); phone, fax and other text stay text", async () => {
     show(<HospitalContacts hospitalId={4} />);
     await screen.findByText(/A: 02-1/);
-    expect(document.querySelectorAll("a").length).toBe(0);
+    const links = Array.from(document.querySelectorAll("a"));
+    expect(links.length).toBe(1);
+    expect(links[0].getAttribute("href")).toBe("mailto:irb@x.kr");
+    expect(links[0].getAttribute("target")).toBe("_blank");
+    expect(links[0].getAttribute("rel")).toContain("noopener");
+  });
+
+  it("links an address in the people table too, and leaves a non-address as text", async () => {
+    state.row = {
+      ...base, staff_status: "ok",
+      staff: [{ tab: "IRB", entries: [
+        { title: "접수", name: "간사", email: "kim@x.kr", tel: "02-3" },
+        { title: "심의", name: "간사2", email: "(평일 08:30)", tel: "02-4" },
+      ] }],
+    };
+    show(<HospitalContacts hospitalId={4} />);
+    await screen.findByText("Who to ask about what");
+    const hrefs = Array.from(document.querySelectorAll("a")).map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual(["mailto:irb@x.kr", "mailto:kim@x.kr"]);
   });
 
   it("an empty field says none is listed; a typed field says an admin entered it", async () => {

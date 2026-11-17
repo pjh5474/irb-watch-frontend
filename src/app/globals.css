@@ -6,6 +6,15 @@
    generator replaced this with a `.dark` class switch, which would have turned off the
    existing `dark:` styles; its dark palette below is applied by the media query instead. */
 
+/* Page widths (owner, 2026-11-17: wider content). Every page container uses max-w-3xl, 4xl or
+   6xl; changing the three sizes here widens all pages at once, in one place. Tailwind's own
+   sizes are 48rem, 56rem and 72rem. */
+@theme {
+  --container-3xl: 64rem;
+  --container-4xl: 72rem;
+  --container-6xl: 88rem;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

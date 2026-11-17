@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
+import { EmailText } from "@/components/email-text";
 import { Button } from "@/components/ui/button";
 import {
   CONTACT_COLUMNS,
@@ -22,8 +23,9 @@ export const contactsKey = (hospitalId: number) => ["hospital-contacts", hospita
  * A hospital's IRB office contacts: phone, fax and email as the hospital wrote them on R-BAY (or
  * typed by an admin, which wins and is never overwritten by a scan), and the people by task from
  * the hospital's manager page. Every signed-in user reads them (table hospital_contacts); only an
- * admin edits. The text is plain text: it is never turned into a link or markup, because the
- * hospitals write anything in these fields ("_", "DRB", "(평일 08:30 ~ 17:30)").
+ * admin edits. The text is plain text, never markup. Only a real email address found in an email
+ * field becomes a `mailto:` link (components/email-text.tsx; owner, 2026-11-17); the rest stays
+ * text, because the hospitals write anything in these fields ("_", "DRB", "(평일 08:30 ~ 17:30)").
  */
 export function HospitalContacts({ hospitalId, canEdit = false }: { hospitalId: number; canEdit?: boolean }) {
   const t = useTranslations("hospitalPage.contacts");
@@ -92,7 +94,11 @@ export function HospitalContacts({ hospitalId, canEdit = false }: { hospitalId: 
               <div key={field} className="min-w-0">
                 <dt className="text-xs font-medium opacity-70">{t(field)}</dt>
                 <dd className="mt-1 whitespace-pre-line break-words">
-                  {shown.text ? shown.text : <span className="opacity-60">{t("none")}</span>}
+                  {shown.text ? (
+                    field === "email" ? <EmailText text={shown.text} /> : shown.text
+                  ) : (
+                    <span className="opacity-60">{t("none")}</span>
+                  )}
                   {shown.from === "admin" && <span className="mt-1 block text-xs opacity-60">{t("typedByAdmin")}</span>}
                 </dd>
               </div>
@@ -129,7 +135,9 @@ export function HospitalContacts({ hospitalId, canEdit = false }: { hospitalId: 
                         <tr key={j} className="border-b align-top last:border-0">
                           <td className="py-1.5 pr-3 break-words">{e.title}</td>
                           <td className="py-1.5 pr-3 break-words">{e.name}</td>
-                          <td className="py-1.5 pr-3 break-all">{e.email}</td>
+                          <td className="py-1.5 pr-3 break-all">
+                            <EmailText text={e.email} />
+                          </td>
                           <td className="py-1.5 break-words">{e.tel}</td>
                         </tr>
                       ))}

@@ -1,5 +1,29 @@
-import { describe, expect, it } from "vitest";
-import { emailParts, mailtoHref } from "../src/lib/email-links";
+import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_MAIL_COMPOSE_URL, copyText, emailParts, mailComposeUrl } from "../src/lib/email-links";
+
+describe("mailComposeUrl and copyText", () => {
+  it("opens Hiworks' new-mail page by default", () => {
+    expect(mailComposeUrl()).toBe(DEFAULT_MAIL_COMPOSE_URL);
+  });
+
+  it("takes an https address from the setting and ignores anything else", () => {
+    vi.stubEnv("NEXT_PUBLIC_MAIL_COMPOSE_URL", "https://mail.example.com/new");
+    expect(mailComposeUrl()).toBe("https://mail.example.com/new");
+    vi.stubEnv("NEXT_PUBLIC_MAIL_COMPOSE_URL", "javascript:alert(1)");
+    expect(mailComposeUrl()).toBe(DEFAULT_MAIL_COMPOSE_URL);
+    vi.unstubAllEnvs();
+  });
+
+  it("copies to the clipboard, and says false when the browser refuses", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    expect(await copyText("a@x.kr")).toBe(true);
+    expect(writeText).toHaveBeenCalledWith("a@x.kr");
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("no")) } });
+    expect(await copyText("a@x.kr")).toBe(false);
+    vi.unstubAllGlobals();
+  });
+});
 
 describe("emailParts", () => {
   it("makes a plain address one link", () => {
@@ -29,11 +53,11 @@ describe("emailParts", () => {
     ]);
   });
 
-  it("cannot carry a subject, a copy or markup into the link", () => {
+  it("never puts a query, quote or markup into an address", () => {
     const parts = emailParts("a@x.kr?cc=evil@z.com&subject=hi <b>x</b>");
-    const links = parts.filter((p) => p.kind === "email").map((p) => mailtoHref(p.text));
-    expect(links).toEqual(["mailto:a@x.kr", "mailto:evil@z.com"]);
-    expect(links.some((l) => /[?&<>"\s]/.test(l))).toBe(false);
+    const addresses = parts.filter((p) => p.kind === "email").map((p) => p.text);
+    expect(addresses).toEqual(["a@x.kr", "evil@z.com"]);
+    expect(addresses.some((a) => /[?&<>"\s]/.test(a))).toBe(false);
   });
 
   it("gives back the whole text when the parts are joined", () => {

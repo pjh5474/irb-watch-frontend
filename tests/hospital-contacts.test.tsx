@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "../messages/en.json";
 import { ContactsToggle, HospitalContacts } from "../src/components/hospital-contacts";
 import type { ContactsRow } from "../src/lib/api/contacts";
+import { DEFAULT_MAIL_COMPOSE_URL } from "../src/lib/email-links";
 
 const state = vi.hoisted(() => ({
   row: null as unknown,
@@ -75,14 +76,35 @@ describe("HospitalContacts", () => {
     expect(screen.getByText(/Read from R-BAY on/)).toBeTruthy();
   });
 
-  it("links only a real email address (mailto, new tab); phone, fax and other text stay text", async () => {
+  it("links only a real email address (to the web mail, new tab); phone, fax and other text stay text", async () => {
     show(<HospitalContacts hospitalId={4} />);
     await screen.findByText(/A: 02-1/);
     const links = Array.from(document.querySelectorAll("a"));
     expect(links.length).toBe(1);
-    expect(links[0].getAttribute("href")).toBe("mailto:irb@x.kr");
+    expect(links[0].textContent).toBe("irb@x.kr");
+    expect(links[0].getAttribute("href")).toBe(DEFAULT_MAIL_COMPOSE_URL);
     expect(links[0].getAttribute("target")).toBe("_blank");
     expect(links[0].getAttribute("rel")).toContain("noopener");
+  });
+
+  it("a click copies the address and says to paste it", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    show(<HospitalContacts hospitalId={4} />);
+    await screen.findByText(/A: 02-1/);
+    fireEvent.click(screen.getByText("irb@x.kr"));
+    expect(writeText).toHaveBeenCalledWith("irb@x.kr");
+    expect(await screen.findByText(/copied: paste it into the recipient/)).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+
+  it("when copying is refused it says so", async () => {
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("no")) } });
+    show(<HospitalContacts hospitalId={4} />);
+    await screen.findByText(/A: 02-1/);
+    fireEvent.click(screen.getByText("irb@x.kr"));
+    expect(await screen.findByText(/could not copy/)).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 
   it("links an address in the people table too, and leaves a non-address as text", async () => {
@@ -96,7 +118,8 @@ describe("HospitalContacts", () => {
     show(<HospitalContacts hospitalId={4} />);
     await screen.findByText("Who to ask about what");
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) => a.getAttribute("href"));
-    expect(hrefs).toEqual(["mailto:irb@x.kr", "mailto:kim@x.kr"]);
+    expect(hrefs).toEqual([DEFAULT_MAIL_COMPOSE_URL, DEFAULT_MAIL_COMPOSE_URL]);
+    expect(Array.from(document.querySelectorAll("a")).map((a) => a.textContent)).toEqual(["irb@x.kr", "kim@x.kr"]);
   });
 
   it("an empty field says none is listed; a typed field says an admin entered it", async () => {

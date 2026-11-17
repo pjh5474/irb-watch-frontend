@@ -82,12 +82,13 @@ export default async function ProjectPage({
   } else if (readableIds.length === 0) {
     body = <p className="text-sm opacity-70">{t(hospitalIds.length ? "noReadableBoardsInProject" : "addSitesFirst")}</p>;
   } else if (view === "documents") {
-    // Newest stored version first (latest_version_id only grows).
+    // Newest post first: the board date, then id; posts with no date go last. Same order as
+    // the source page (a first scan stores posts newest first, so ids run backwards).
     const { data: docs, count, error } = await supabase
       .from("documents")
       .select("id, title, source_id, status, posted_on, latest_version_id", { count: "exact" })
       .in("source_id", readableIds)
-      .order("latest_version_id", { ascending: false, nullsFirst: false })
+      .order("posted_on", { ascending: false, nullsFirst: false })
       .order("id", { ascending: false })
       .range(from, to);
     if (error?.code === "PGRST103") notFound();

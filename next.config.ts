@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   // The scaffold enabled cacheComponents and partialPrefetching. Removed: every page here
   // depends on the signed-in user's cookies, so they would only add Suspense plumbing.
+  // The browser keeps a page it already showed for 60 s, so going back to it is instant
+  // instead of a white wait. The cache lives in the user's own browser (never shared).
+  // router.refresh() and a full reload clear it; the data changes mostly once a day (the scan).
+  experimental: {
+    staleTimes: { dynamic: 60 },
+  },
   turbopack: {
     rules: {
       "*.css": {

@@ -195,6 +195,58 @@ export const sessionApi = {
     apiFetch<SessionKind>(`/admin/session-kinds/${key}`, json("PATCH", change)),
 };
 
+// ALL-SEARCH (admin): a hospital's whole backlog, then the AI search over it. Two jobs, each with
+// a status, progress, a readable reason when it fails and a stop.
+
+export type AllSearchBoard = {
+  name: string;
+  stored: number;
+  total: number;
+  left: number | null; // unstored posts still on the board's list
+  failed: number;
+  flagged: number; // saved posts flagged for review (a file that could not be read)
+  state: "waiting" | "reading" | "done" | "cap" | "stopped" | "paused" | "failed";
+  error: string | null;
+};
+
+export type AllSearchJob = {
+  id: string;
+  hospital_id: number;
+  stage: "read" | "ai";
+  status: "queued" | "running" | "done" | "stopped" | "failed";
+  stop_requested: boolean;
+  error: string | null;
+  progress: {
+    boards?: Record<string, AllSearchBoard>;
+    batches?: number;
+    batches_done?: number;
+    posts?: number;
+    proposed?: number;
+    skipped?: number;
+  };
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type AllSearchPreview = {
+  stored_posts: number;
+  posts: number;
+  chars: number;
+  batches: number;
+  run_batches: number;
+  left_over: number;
+  enabled: boolean;
+};
+
+export const allSearchApi = {
+  jobs: (hospitalId: number) => apiFetch<AllSearchJob[]>(`/admin/hospitals/${hospitalId}/all-search`),
+  read: (hospitalId: number) => apiFetch<AllSearchJob>(`/admin/hospitals/${hospitalId}/all-search/read`, { method: "POST" }),
+  preview: (hospitalId: number) => apiFetch<AllSearchPreview>(`/admin/hospitals/${hospitalId}/all-search/preview`),
+  ai: (hospitalId: number) => apiFetch<AllSearchJob>(`/admin/hospitals/${hospitalId}/all-search/ai`, { method: "POST" }),
+  stop: (jobId: string) => apiFetch<AllSearchJob>(`/admin/all-search-jobs/${jobId}/stop`, { method: "POST" }),
+};
+
 export const taskApi = {
   list: (projectId: number, includeRemoved = false) =>
     apiFetch<ProjectTask[]>(`/projects/${projectId}/tasks${includeRemoved ? "?include_removed=true" : ""}`),

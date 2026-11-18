@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Inbox, Sparkles, Tags } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { AllSearch } from "@/components/admin/all-search";
 import { HOSPITALS_KEY } from "@/components/admin/hospital-admin";
 import { adminErrorText } from "@/components/admin/error-text";
 import { Section } from "@/components/admin/section";
@@ -94,6 +95,7 @@ export function SessionAdmin() {
         {chosen !== null && <HospitalSessions key={chosen} hospitalId={chosen} kinds={allKinds} />}
       </Section>
       {chosen !== null && <FindSessions key={`find-${chosen}`} hospitalId={chosen} name={names.get(chosen) ?? ""} />}
+      {chosen !== null && <AllSearch key={`all-${chosen}`} hospitalId={chosen} name={names.get(chosen) ?? ""} />}
       <KindEditor kinds={allKinds} />
     </main>
   );

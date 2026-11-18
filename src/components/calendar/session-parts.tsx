@@ -1,11 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
-import type { IrbSession, SessionInput, SessionKind, SessionState } from "@/lib/api/calendar";
-import { timeLabel } from "@/lib/api/calendar";
+import type { IrbSession, SessionInput, SessionKind, SessionSource, SessionState } from "@/lib/api/calendar";
+import { sessionApi, timeLabel } from "@/lib/api/calendar";
 
 // Pieces shared by the calendar, the step page and the admin sessions tab (CAL-1).
 
@@ -33,6 +33,39 @@ export function DateTime({ day, time }: { day: string; time: string | null }) {
     <span>
       {day} {time ? timeLabel(time) : <span className="opacity-60">({t("timeUnknown")})</span>}
     </span>
+  );
+}
+
+/**
+ * The stored post a date was read from: a link icon and the post's real title, opening the
+ * post's own page in a new tab. The title is page text: plain text only. Without a readable
+ * title (loading, a study or hand-made board, a failure) it falls back to the source page link.
+ */
+function EvidencePost({ sessionId }: { sessionId: number }) {
+  const t = useTranslations("sessions");
+  const [post, setPost] = useState<SessionSource | null>(null);
+  useEffect(() => {
+    let live = true;
+    sessionApi
+      .source(sessionId)
+      .then((s) => live && setPost(s))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [sessionId]);
+  const href = post?.document_id ? `/documents/${post.document_id}` : `/sessions/${sessionId}/source`;
+  return (
+    <Link
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={t("fromStoredPost")}
+      className="flex items-start gap-1 text-xs underline underline-offset-4"
+    >
+      <span aria-hidden>🔗</span>
+      <span className="break-words">{post?.title || t("fromStoredPost")}</span>
+    </Link>
   );
 }
 
@@ -70,11 +103,7 @@ export function SessionFacts({ session, kinds, hospital }: { session: IrbSession
             )}
             {/* Copied from a hospital post by the AI: untrusted, shown as plain text only. */}
             {session.evidence_quote && <q className="opacity-80">{session.evidence_quote}</q>}
-            {session.evidence_version_id && (
-              <Link href={`/sessions/${session.id}/source`} target="_blank" rel="noopener noreferrer" className="text-xs underline underline-offset-4">
-                {t("fromStoredPost")}
-              </Link>
-            )}
+            {session.evidence_version_id && <EvidencePost sessionId={session.id} />}
           </dd>
         </>
       )}

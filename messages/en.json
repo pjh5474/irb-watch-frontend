@@ -128,7 +128,8 @@
       "post": "Post",
       "postedOn": "Posted on",
       "quote": "Quote",
-      "noText": "Only the title and the quote are shown here. The full post stays behind its board's access.",
+      "noText": "Only the title and the quote are shown here. The full post opens on its own page and stays behind its board's access.",
+      "openDocument": "Open the document page",
       "toHospital": "Back to the hospital"
     },
     "noUpcoming": "No upcoming session is listed for this hospital yet.",

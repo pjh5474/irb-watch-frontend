@@ -154,6 +154,7 @@ export type SessionSource = {
   posted_on: string | null;
   quote: string | null; // untrusted: plain text only
   origin: "admin" | "user" | "ai";
+  document_id?: number | null; // the post's own page, /documents/{id}
 };
 
 /** The AI found it and no admin has reviewed it: shown with an "AI, not confirmed" mark. */

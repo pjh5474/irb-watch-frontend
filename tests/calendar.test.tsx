@@ -64,6 +64,10 @@ vi.mock("@/lib/api/calendar", async () => {
     },
     sessionApi: {
       forHospital: async () => state.sessions,
+      source: async (id: number) => ({
+        session_id: id, hospital_id: 1, hospital_name: "H", board: "B", title: "Real notice title",
+        posted_on: null, quote: null, origin: "ai", document_id: 383,
+      }),
       propose: call("propose"),
       withdraw: call("withdraw"),
       kinds: async () => [

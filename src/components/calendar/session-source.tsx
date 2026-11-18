@@ -48,12 +48,30 @@ export function SessionSourceView({ sessionId, hospitalId }: { sessionId: number
             <dt className="opacity-70">{t("board")}</dt>
             <dd>{source.board}</dd>
             <dt className="opacity-70">{t("post")}</dt>
-            <dd className="whitespace-pre-wrap">{source.title || "-"}</dd>
+            <dd className="whitespace-pre-wrap">
+              {source.document_id ? (
+                <Link href={`/documents/${source.document_id}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">
+                  {source.title || t("openDocument")}
+                </Link>
+              ) : (
+                source.title || "-"
+              )}
+            </dd>
             <dt className="opacity-70">{t("postedOn")}</dt>
             <dd>{source.posted_on ?? "-"}</dd>
             <dt className="opacity-70">{t("quote")}</dt>
             <dd>{source.quote ? <q className="opacity-90">{source.quote}</q> : "-"}</dd>
           </dl>
+          {source.document_id ? (
+            <Link
+              href={`/documents/${source.document_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-fit rounded border px-3 py-1.5 font-medium hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            >
+              {t("openDocument")} ↗
+            </Link>
+          ) : null}
           <p className="text-xs opacity-70">{t("noText")}</p>
         </section>
       )}

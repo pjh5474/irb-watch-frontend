@@ -236,14 +236,16 @@ function Chip({ item, onSession, full = false }: { item: CalendarItem; onSession
   const proposed = item.session_state === "proposed";
   const cancelled = item.session_state === "cancelled";
   const faded = item.done || (item.type.startsWith("step_") && item.closed);
+  const sessionItem = item.type.startsWith("session_");
   const label = (
     <>
       {item.time && <span className="mr-1 tabular-nums">{timeLabel(item.time)}</span>}
+      {sessionItem && item.hospital_name && <span className="mr-1 font-semibold">{item.hospital_name}</span>}
       <span className="font-medium">{t(`types_short.${item.type}`)}</span> {item.title}
       {proposed && <span className="ml-1">({t("notConfirmed")})</span>}
       {full && (
         <span className="ml-1 opacity-70">
-          {[item.project_name, item.hospital_name, item.site_label].filter(Boolean).join(" · ")}
+          {[item.project_name, sessionItem ? null : item.hospital_name, item.site_label].filter(Boolean).join(" · ")}
         </span>
       )}
     </>

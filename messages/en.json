@@ -73,7 +73,7 @@
     "noCutoff": "not given (the meeting day counts)",
     "note": "Note",
     "evidence": "Source",
-    "fromStoredPost": "From a stored hospital post",
+    "fromStoredPost": "Open the hospital post the AI read",
     "origin": "Entered by",
     "origins": { "admin": "an admin", "user": "a user's proposal", "ai": "the AI search (proposal)" },
     "proposedBy": "proposed by {name}",

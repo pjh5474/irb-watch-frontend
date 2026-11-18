@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Link } from "@/i18n/navigation";
 import type { IrbSession, SessionInput, SessionKind, SessionState } from "@/lib/api/calendar";
 import { timeLabel } from "@/lib/api/calendar";
 
@@ -69,7 +70,11 @@ export function SessionFacts({ session, kinds, hospital }: { session: IrbSession
             )}
             {/* Copied from a hospital post by the AI: untrusted, shown as plain text only. */}
             {session.evidence_quote && <q className="opacity-80">{session.evidence_quote}</q>}
-            {session.evidence_version_id && <span className="text-xs opacity-70">{t("fromStoredPost")}</span>}
+            {session.evidence_version_id && (
+              <Link href={`/sessions/${session.id}/source`} target="_blank" rel="noopener noreferrer" className="text-xs underline underline-offset-4">
+                {t("fromStoredPost")}
+              </Link>
+            )}
           </dd>
         </>
       )}

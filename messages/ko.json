@@ -73,7 +73,7 @@
     "noCutoff": "없음 (심의일 기준)",
     "note": "메모",
     "evidence": "근거",
-    "fromStoredPost": "저장된 병원 게시글에서",
+    "fromStoredPost": "AI가 읽은 병원 게시글 열기",
     "origin": "입력",
     "origins": { "admin": "관리자", "user": "사용자 제안", "ai": "AI 찾기 (제안)" },
     "proposedBy": "{name} 제안",

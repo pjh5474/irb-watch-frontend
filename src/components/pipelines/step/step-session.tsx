@@ -6,7 +6,8 @@ import { ProposeSession } from "@/components/calendar/calendar-view";
 import { DateTime, SessionFacts, SessionStateBadge, kindLabel } from "@/components/calendar/session-parts";
 import { Note, useChange } from "@/components/pipelines/shared";
 import { Button } from "@/components/ui/button";
-import type { IrbSession } from "@/lib/api/calendar";
+import { Link } from "@/i18n/navigation";
+import { cutoffPassed, isUnreviewedAi, type IrbSession } from "@/lib/api/calendar";
 import { daysUntil, pipelineApi, type StepPage, todaySeoul } from "@/lib/api/pipelines";
 
 /**
@@ -29,8 +30,16 @@ export function StepSession({ pipelineId, page, readOnly }: { pipelineId: number
     change.run(() => pipelineApi.updateStep(pipelineId, page.step.id, { target_session_id: id }), id ? t("targetSet") : t("targetCleared"));
   const label = (s: IrbSession) =>
     `${kindLabel(kinds, s.kind_key)} ${s.meets_on}${s.cutoff_on ? ` (${t("cutoffShort", { date: s.cutoff_on })})` : ""}${
-      s.state === "proposed" ? ` · ${t("state.proposed")}` : s.state === "tentative" ? ` · ${t("state.tentative")}` : ""
-    }`;
+      isUnreviewedAi(s)
+        ? ` · ${t("aiUnconfirmed")}`
+        : s.state === "proposed"
+          ? ` · ${t("state.proposed")}`
+          : s.state === "tentative"
+            ? ` · ${t("state.tentative")}`
+            : ""
+    }${cutoffPassed(s, today) ? ` · ${t("cutoffClosedShort")}` : ""}`;
+  // The date the user will be aiming for (the pick, else the hint): its source and a closed cutoff.
+  const focus = target ?? suggested;
   const deadline = target ? (target.cutoff_on ?? target.meets_on) : null;
   const left = deadline ? daysUntil(deadline, today) : null;
 
@@ -100,6 +109,19 @@ export function StepSession({ pipelineId, page, readOnly }: { pipelineId: number
         <p className="flex flex-wrap items-center gap-2 text-xs opacity-80">
           {t("hint")} <DateTime day={suggested.cutoff_on ?? suggested.meets_on} time={suggested.cutoff_on ? suggested.cutoff_at : suggested.meets_at} />
           <SessionStateBadge state={suggested.state} />
+        </p>
+      )}
+      {focus && cutoffPassed(focus, today) && (
+        <p role="alert" className="rounded border border-amber-400 bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+          {t("cutoffClosedAlert", { date: focus.cutoff_on ?? "" })}
+        </p>
+      )}
+      {focus && isUnreviewedAi(focus) && (
+        <p className="flex flex-wrap items-center gap-2 text-xs opacity-80">
+          {t("aiUnconfirmedNote")}
+          <Link href={`/sessions/${focus.id}/source`} className="underline underline-offset-4">
+            {t("source.open")}
+          </Link>
         </p>
       )}
       {proposing && (

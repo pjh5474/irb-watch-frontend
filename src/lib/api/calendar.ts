@@ -144,7 +144,28 @@ export const calendarApi = {
   },
 };
 
+/** Why a date was suggested: the post it was read from, for every signed-in user. Never the post's text. */
+export type SessionSource = {
+  session_id: number;
+  hospital_id: number | null;
+  hospital_name: string | null;
+  board: string;
+  title: string; // untrusted page text: plain text only
+  posted_on: string | null;
+  quote: string | null; // untrusted: plain text only
+  origin: "admin" | "user" | "ai";
+};
+
+/** The AI found it and no admin has reviewed it: shown with an "AI, not confirmed" mark. */
+export const isUnreviewedAi = (s: Pick<IrbSession, "origin" | "state" | "reviewed_at">) =>
+  s.origin === "ai" && s.state === "proposed" && !s.reviewed_at;
+
+/** The submission cutoff is known and already behind us, while the meeting is still ahead (or today). */
+export const cutoffPassed = (s: Pick<IrbSession, "cutoff_on" | "meets_on">, today: string) =>
+  !!s.cutoff_on && s.cutoff_on < today && s.meets_on >= today;
+
 export const sessionApi = {
+  source: (id: number) => apiFetch<SessionSource>(`/sessions/${id}/source`),
   kinds: (includeArchived = false) =>
     apiFetch<SessionKind[]>(`/session-kinds${includeArchived ? "?include_archived=true" : ""}`),
   forHospital: (hospitalId: number, start?: string, end?: string) => {

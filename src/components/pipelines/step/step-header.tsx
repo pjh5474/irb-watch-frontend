@@ -1,10 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { errorText } from "@/components/pipelines/shared";
 import {
+  type CustomDate,
   type PipelineStatus,
   type PipelineStep,
   type StepResult,
@@ -51,6 +52,15 @@ export function StepHeader({
   const [subject, setSubject] = useState(initial.subject);
   const [number, setNumber] = useState(initial.number);
   const [numberError, setNumberError] = useState(false);
+  const [customs, setCustoms] = useState<CustomDate[]>(step.custom_dates ?? []);
+  // The memo grows with its text: the whole memo is always shown, never a scroll bar.
+  const noteBox = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const box = noteBox.current;
+    if (!box) return;
+    box.style.height = "auto";
+    box.style.height = `${box.scrollHeight}px`;
+  }, [note]);
   // What is shown is the user's latest pick until the server's copy has caught up.
   const statusKey = save.value("status_key", step.status_key) ?? step.status_key;
   const resultKey = save.value("result_key", step.result_key) ?? null;
@@ -77,6 +87,7 @@ export function StepHeader({
     setSubject(initial.subject);
     setNumber(initial.number);
     setNumberError(false);
+    setCustoms(step.custom_dates ?? []);
   };
 
   return (
@@ -200,11 +211,24 @@ export function StepHeader({
         ))}
       </div>
 
+      <CustomDates
+        value={customs}
+        readOnly={readOnly}
+        onChange={(next, how) => {
+          setCustoms(next);
+          const body = { custom_dates: next.filter((d) => d.label.trim()) };
+          if (how === "pick") save.pick(body);
+          else save.type(body);
+        }}
+        onBlur={save.flush}
+      />
+
       <div className="flex flex-col gap-1 text-sm">
         <label htmlFor="step-note">{t("note")}</label>
         <textarea
           id="step-note"
-          className="rounded border px-2 py-1"
+          ref={noteBox}
+          className="resize-none overflow-hidden rounded border px-2 py-1"
           rows={2}
           maxLength={4000}
           disabled={readOnly}
@@ -222,6 +246,74 @@ export function StepHeader({
         </p>
       )}
       {!readOnly && <SaveStatus save={save} resetTyped={resetTyped} />}
+    </section>
+  );
+}
+
+const MAX_CUSTOM_DATES = 10; // the server's limit too
+
+/**
+ * The step's own named dates (owner, 2026-11-18). A name is typed (saved after a pause), a day is
+ * picked (saved at once). A row without a name is not sent: it is a row still being filled in.
+ */
+function CustomDates({
+  value,
+  readOnly,
+  onChange,
+  onBlur,
+}: {
+  value: CustomDate[];
+  readOnly: boolean;
+  onChange: (next: CustomDate[], how: "pick" | "type") => void;
+  onBlur: () => void;
+}) {
+  const t = useTranslations("pipelines");
+  if (readOnly && value.length === 0) return null;
+  const edit = (index: number, change: Partial<CustomDate>, how: "pick" | "type") =>
+    onChange(value.map((d, i) => (i === index ? { ...d, ...change } : d)), how);
+  return (
+    <section className="flex flex-col gap-2 text-sm" aria-label={t("customDates")}>
+      <h2 className="opacity-70">{t("customDates")}</h2>
+      {value.map((d, i) => (
+        <div key={d.id || `new-${i}`} className="flex flex-wrap items-center gap-2">
+          <input
+            aria-label={t("customDateName")}
+            className="min-w-40 flex-1 rounded border px-2 py-1"
+            disabled={readOnly}
+            maxLength={60}
+            placeholder={t("customDateName")}
+            value={d.label}
+            onChange={(e) => edit(i, { label: e.target.value }, "type")}
+            onBlur={onBlur}
+          />
+          <input
+            type="date"
+            aria-label={d.label || t("customDateDay")}
+            className="rounded border px-2 py-1"
+            disabled={readOnly}
+            value={d.day ?? ""}
+            onChange={(e) => edit(i, { day: e.target.value || null }, "pick")}
+          />
+          {!readOnly && (
+            <Button size="sm" variant="ghost" onClick={() => onChange(value.filter((_, j) => j !== i), "pick")}>
+              {t("customDateRemove")}
+            </Button>
+          )}
+        </div>
+      ))}
+      {!readOnly && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={value.length >= MAX_CUSTOM_DATES}
+            onClick={() => onChange([...value, { id: "", label: "", day: null }], "type")}
+          >
+            {t("customDateAdd")}
+          </Button>
+          <span className="text-xs opacity-60">{value.length >= MAX_CUSTOM_DATES ? t("customDateMax") : t("customDateHint")}</span>
+        </div>
+      )}
     </section>
   );
 }

@@ -132,15 +132,17 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
           {d.copied_from.removed && <span className="opacity-70"> ({t("copiedFromRemoved")})</span>}
         </p>
       )}
+      {/* The target IRB meeting is the first card (owner, 2026-11-18): picking it fills the dates below.
+          An older server sends no session fields: the section waits for CAL-1's backend. */}
+      {d.session_kinds !== undefined && (
+        <StepSession key={`session-${step.id}`} pipelineId={id} page={d} readOnly={readOnly} />
+      )}
       <StepHeader
         key={`header-${step.id}`} pipelineId={id} step={step} statuses={d.statuses} readOnly={readOnly}
         results={d.results ?? []} suggestedStatus={d.suggested_status ?? null}
         missingRequired={missingRequired(d)}
       />
-      {/* An older server sends no session fields: the section waits for CAL-1's backend. */}
-      {d.session_kinds !== undefined && (
-        <StepSession key={`session-${step.id}`} pipelineId={id} page={d} readOnly={readOnly} />
-      )}
+
       <StepDocuments pipelineId={id} page={d} readOnly={readOnly} />
       {!d.parent && (
         <FollowUps key={`follow-${step.id}`} pipelineId={id} page={d} readOnly={readOnly} />

@@ -504,7 +504,7 @@ describe("HospitalView", () => {
     const first = within(rows[0]);
     expect(first.getByRole("link", { name: "Approved" }).getAttribute("href")).toBe("/pipelines/9/steps/1");
     expect(first.getByText("2 follow-ups")).toBeTruthy();
-    expect(first.getByText("Decided 2026-11-01")).toBeTruthy();
+    expect(first.getByText("IRB meeting date 2026-11-01")).toBeTruthy();
     expect(within(rows[1]).getByText("PT 2.0")).toBeTruthy();
     expect(within(rows[1]).getAllByText("—")).toHaveLength(2); // Lee and Park have no amendment
   });
@@ -595,7 +595,7 @@ describe("PipelineView (overview)", () => {
     expect(meeting.queryByText(/overdue/)).toBeNull(); // closed steps are never overdue
     expect(meeting.getByText("no documents")).toBeTruthy();
     expect(meeting.getByText("AI draft being written")).toBeTruthy();
-    expect(meeting.getByText("Decided 2026-11-11")).toBeTruthy();
+    expect(meeting.getByText("IRB meeting date 2026-11-11")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Upload" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Draft for this step" })).toBeNull();
     expect(screen.queryByLabelText("Status")).toBeNull();
@@ -661,9 +661,9 @@ describe("StepPageView", () => {
     expect(state.calls).toEqual([]); // cancelled: nothing saved
     // Auto-save: the controls stay usable while a change is saved; saves go out one at a time.
     fireEvent.change(screen.getByLabelText("Status"), { target: { value: "submitted" } });
-    expect((screen.getByLabelText("Due date") as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByLabelText("IRB submission deadline") as HTMLInputElement).disabled).toBe(false);
     expect((screen.getByLabelText("Status") as HTMLSelectElement).value).toBe("submitted"); // shown at once
-    fireEvent.change(screen.getByLabelText("Due date"), { target: { value: "2026-12-31" } });
+    fireEvent.change(screen.getByLabelText("IRB submission deadline"), { target: { value: "2026-12-31" } });
     await vi.waitFor(() =>
       expect(state.calls).toEqual([
         ["updateStep", 9, 21, { status_key: "submitted" }],
@@ -671,6 +671,19 @@ describe("StepPageView", () => {
       ]),
     );
     ask.mockRestore();
+  });
+
+  it("adds, names and dates an own date of the step, and the memo has no scroll bar", async () => {
+    await stepPage();
+    fireEvent.click(screen.getByRole("button", { name: "Add a date" }));
+    fireEvent.change(screen.getByLabelText("Date name"), { target: { value: "Sponsor deadline" } });
+    fireEvent.change(screen.getByLabelText("Sponsor deadline"), { target: { value: "2026-12-05" } });
+    await vi.waitFor(() =>
+      expect(state.calls).toContainEqual([
+        "updateStep", 9, 21, { custom_dates: [{ id: "", label: "Sponsor deadline", day: "2026-12-05" }] },
+      ]),
+    );
+    expect(screen.getByLabelText("Note").className).toContain("overflow-hidden");
   });
 
   it("groups slots by section and uploads into a slot, checking the file first", async () => {
@@ -735,7 +748,7 @@ describe("StepPageView", () => {
     expect(screen.getByText(/This pipeline is removed/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Back to the pipeline" }).getAttribute("href")).toBe("/pipelines/9");
     expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
-    expect((screen.getByLabelText("Due date") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText("IRB submission deadline") as HTMLInputElement).disabled).toBe(true);
   });
 
   it("shows the server's reason when the step cannot be opened", async () => {

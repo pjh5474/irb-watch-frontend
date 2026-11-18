@@ -77,7 +77,11 @@ export type PipelineStep = {
   result_key?: string | null; // the IRB's answer; null: none yet
   target_session_id?: number | null; // CAL-1: the IRB meeting it aims for
   copied_from_step_id?: number | null; // phase C2: copied from a sibling site's step
+  custom_dates?: CustomDate[]; // the user's own named dates
 };
+
+/** One of a step's own dates; the server makes the id of a new one. */
+export type CustomDate = { id: string; label: string; day: string | null };
 
 /** The step a copied step came from (phase C2). removed: that step or its pipeline is removed. */
 export type StepOrigin = {
@@ -221,6 +225,7 @@ export type StepChange = Partial<{
   sequence_no: number | null;
   result_key: string | null;
   target_session_id: number | null;
+  custom_dates: CustomDate[];
 }>;
 
 /** One of the user's own files offered for an AI draft of a step (its newest version). */

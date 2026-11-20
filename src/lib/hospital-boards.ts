@@ -1,11 +1,11 @@
 // A hospital's boards as tabs, and the sources page grouped by hospital.
 
-export const KIND_ORDER = ["notice", "forms", "regulations", "other"] as const;
+export const KIND_ORDER = ["notice", "news", "forms", "regulations", "faq", "committee_members", "other"] as const;
 export type Kind = (typeof KIND_ORDER)[number];
 
 type Board = { id: number; board_kind: string; name: string };
 
-/** The tabs in a fixed order: notices, forms, regulations, others; then by id within a kind. */
+/** The tabs in a fixed order: notices, news, forms, regulations, FAQ, committee list, others; then by id within a kind. */
 export function orderBoards<T extends Board>(boards: T[]): T[] {
   const rank = (k: string) => {
     const i = KIND_ORDER.indexOf(k as Kind);

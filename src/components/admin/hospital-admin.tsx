@@ -5,6 +5,7 @@ import { Hospital, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { SOURCES_KEY } from "@/components/admin/admin-sources";
+import { BoardSync } from "@/components/admin/board-sync";
 import { adminErrorText } from "@/components/admin/error-text";
 import { Section } from "@/components/admin/section";
 import { Button } from "@/components/ui/button";
@@ -182,6 +183,9 @@ function HospitalRow({
         </div>
       )}
       {!editing && hospital.note && <p className="text-xs whitespace-pre-wrap opacity-70">{hospital.note}</p>}
+      {!editing && hospital.boards.some((b) => b.adapter === "rbay" && b.requires_login) && (
+        <BoardSync hospitalId={hospital.id} onChanged={onChanged} />
+      )}
       {hospital.boards.length === 0 ? (
         <p className="text-xs opacity-70">{t("hospitals.noBoards")}</p>
       ) : (

@@ -31,7 +31,22 @@ export type AdminSource = {
 
 export type RbayHospitalResult = { hospital_id: number; hospital_made: boolean; sources: AdminSource[] };
 
-export const BOARD_KINDS = ["notice", "forms", "regulations", "other"] as const;
+// What the R-BAY board sync found for one hospital (one entry per hospital code + login).
+export type BoardSyncGroup = {
+  agency: string;
+  login_user: string;
+  error: string | null; // set: the menu could not be read; nothing was changed
+  menu: Record<string, string>;
+  already: string[];
+  to_create: string[];
+  not_in_menu: string[];
+  unknown: string[];
+  created: AdminSource[];
+  failed: Record<string, string>; // board code -> why it was not created
+};
+export type BoardSyncResult = { hospital_id: number; hospital_name: string; dry_run: boolean; groups: BoardSyncGroup[] };
+
+export const BOARD_KINDS =["notice", "forms", "regulations", "committee_members", "news", "faq", "other"] as const;
 export type BoardKind = (typeof BOARD_KINDS)[number];
 
 // The platform-wide hospital catalog; each hospital groups its boards (sources).
@@ -96,6 +111,13 @@ export const adminApi = {
     boards: string[];
     ai_enabled?: boolean | null;
   }) => apiFetch<RbayHospitalResult>("/admin/sources/rbay-hospital", json("POST", body)),
+  // Add the boards an R-BAY hospital has but the server does not read yet. One login per call;
+  // dry_run true only shows what would be made.
+  syncRbayBoards: (hospitalId: number, dryRun: boolean) =>
+    apiFetch<BoardSyncResult>(
+      "/admin/sources/rbay-sync",
+      json("POST", { hospital_id: hospitalId, dry_run: dryRun }),
+    ),
   // A source an admin fills by hand (no e-IRB site); never scanned.
   createManualSource: (body: {
     name: string;

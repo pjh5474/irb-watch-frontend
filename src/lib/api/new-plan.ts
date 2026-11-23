@@ -22,7 +22,8 @@ export type PlanField = {
   max_length: number | null;
   numeric: boolean;
   dynamic_options: boolean; // a select whose list R-BAY loads (typed here as its code)
-  supported: boolean; // false: a file or 제출서류 field, not written by the job yet
+  supported: boolean; // false: a file field the job does not write yet (the main attachments and their entries work)
+  max_files: number | null;
   code_prefix_of: string | null;
   code_prefixes: Record<string, string> | null; // parent option key -> the code prefix, e.g. cancer -> DCLA
   // The lists R-BAY loads for a dependent select, where they were read: parent option key -> {code: text}.
@@ -39,6 +40,33 @@ export type PlanForm = {
 };
 
 export type PlanValues = Record<string, unknown>;
+
+/** A stored version of a file of the step; a record names it by `version_id` (as text). */
+export type PlanFile = {
+  version_id: number;
+  document_id: number;
+  document_name: string;
+  version_no: number;
+  filename: string;
+  size_bytes: number;
+  created_at: string;
+};
+
+/** One line of R-BAY's 제출서류 list (name from the hospital's list or free text; version and date as typed). */
+export type DocEntry = { name: string; version: string; date: string };
+
+export function docEntries(value: unknown): DocEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => {
+    const e = (v ?? {}) as Record<string, unknown>;
+    return { name: String(e.name ?? ""), version: String(e.version ?? ""), date: String(e.date ?? "") };
+  });
+}
+
+/** The entry a picked file starts with: its name without the extension. Nothing else is guessed. */
+export function entryFromFile(file: PlanFile): DocEntry {
+  return { name: file.filename.replace(/\.[^./\\]{1,8}$/, ""), version: "", date: "" };
+}
 
 export type PlanRecord = {
   id: string;
@@ -78,6 +106,7 @@ export const newPlanApi = {
     apiFetch<PlanRecord>(`${base(stepId)}/values`, { method: "PUT", body: JSON.stringify(body) }),
   check: (stepId: number) => apiFetch<{ ready: boolean; problems: string[] }>(`${base(stepId)}/check`),
   start: (stepId: number) => apiFetch<PlanRun>(`${base(stepId)}/runs`, { method: "POST" }),
+  files: (stepId: number) => apiFetch<PlanFile[]>(`${base(stepId)}/files`),
   runs: (stepId: number, history = false) =>
     apiFetch<PlanRun[]>(`${base(stepId)}/runs${history ? "?history=true" : ""}`),
   // The server cannot see R-BAY: it needs the user's statement that the draft is gone.
@@ -185,6 +214,14 @@ export function valuesToSave(form: PlanForm, raw: PlanValues, projectKey: string
       if (!field.supported) continue;
       const value = values[field.key];
       if (!isPresent(value) || !isShown(field, page.fields, values, projectKey)) continue;
+      if (field.kind === "docs") {
+        // a row with no name is an empty row; the rest are trimmed
+        const rows = docEntries(value)
+          .map((e) => ({ name: e.name.trim(), version: e.version.trim(), date: e.date.trim() }))
+          .filter((e) => e.name !== "");
+        if (rows.length > 0) out[field.key] = rows;
+        continue;
+      }
       out[field.key] = typeof value === "string" ? value.trim() : value;
     }
   }

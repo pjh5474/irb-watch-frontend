@@ -7,7 +7,9 @@ import { type Message, Note, errorText } from "@/components/pipelines/shared";
 import { Button } from "@/components/ui/button";
 import {
   RUN_POLL_MS,
+  type DocEntry,
   type PlanField,
+  type PlanFile,
   type PlanForm,
   type PlanRecord,
   type PlanRun,
@@ -16,6 +18,8 @@ import {
   cleanMulti,
   codePrefix,
   dependentList,
+  docEntries,
+  entryFromFile,
   isOpenRun,
   isShown,
   newPlanApi,
@@ -99,6 +103,14 @@ function Editor({
     queryFn: () => newPlanApi.runs(stepId, true),
     enabled: showHistory,
   });
+  // The step's own files, for the attachment picker (only when the form has a file field the job writes).
+  const hasFileField = form.pages.some((p) => p.fields.some((f) => f.kind === "file" && f.supported));
+  const filesQ = useQuery({
+    queryKey: ["new-plan", stepId, "files"],
+    queryFn: () => newPlanApi.files(stepId),
+    enabled: hasFileField,
+  });
+  const stepFiles = filesQ.data ?? [];
 
   const [projectKey, setProjectKey] = useState(() => {
     const keys = Object.keys(form.types);
@@ -111,6 +123,9 @@ function Editor({
   const [problems, setProblems] = useState<string[] | null>(null);
   const [confirming, setConfirming] = useState<"start" | "release" | null>(null);
 
+  // The files the next run would send to R-BAY (named in the start confirm: an upload cannot be undone there)
+  const picked = Array.isArray(values["attachments.main"]) ? (values["attachments.main"] as string[]) : [];
+  const pickedFiles = picked.flatMap((id) => stepFiles.filter((f) => String(f.version_id) === id));
   const runs = runsQ.data ?? [];
   const open = runs.some(isOpenRun);
   const held = runs.some((r) => r.draft_may_exist);
@@ -244,6 +259,8 @@ function Editor({
                             key={f.key}
                             field={f}
                             values={values}
+                            files={stepFiles}
+                            filesState={filesQ.isError ? errorText(filesQ.error, t) : filesQ.isLoading ? "loading" : null}
                             disabled={flight.busy}
                             onChange={(value) =>
                               edit(() => setValues((old) => pruneValues(form, { ...old, [f.key]: value }, projectKey)))
@@ -292,6 +309,16 @@ function Editor({
           {confirming === "start" && (
             <div role="alertdialog" aria-label={t("newPlan.startConfirmTitle")} className="flex flex-col gap-2 rounded border border-amber-400 p-3">
               <p>{t("newPlan.startConfirm")}</p>
+              {pickedFiles.length > 0 && (
+                <div>
+                  <p className="font-medium text-red-700 dark:text-red-300">{t("newPlan.uploadWarning")}</p>
+                  <ul className="list-disc pl-5">
+                    {pickedFiles.map((f) => (
+                      <li key={f.version_id}>{f.filename}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Button size="sm" disabled={flight.busy} onClick={() => start(form)}>
                   {t("newPlan.startYes")}
@@ -399,10 +426,12 @@ function RunList({ runs }: { runs: PlanRun[] }) {
 }
 
 function FieldInput({
-  field, values, disabled, onChange,
+  field, values, files, filesState, disabled, onChange,
 }: {
   field: PlanField;
   values: PlanValues;
+  files: PlanFile[]; // the step's own files (for a file field)
+  filesState: string | null; // "loading", an error text, or null
   disabled: boolean;
   onChange: (value: unknown) => void;
 }) {
@@ -445,6 +474,92 @@ function FieldInput({
 
   if (!field.supported)
     return row(<span className="text-xs opacity-60">{t("newPlan.fileUnsupported")}</span>, true);
+
+  // The step's own files: tick the ones to attach. The value is the list of version ids (as text).
+  if (field.kind === "file") {
+    const ticked = list;
+    const full = field.max_files !== null && ticked.length >= field.max_files;
+    return row(
+      <div role="group" aria-labelledby={`${id}-label`} className="flex flex-col gap-1">
+        {filesState === "loading" && <span className="opacity-70">{t("loading")}</span>}
+        {filesState !== null && filesState !== "loading" && (
+          <span role="alert" className="text-red-600">
+            {filesState}
+          </span>
+        )}
+        {filesState === null && files.length === 0 && <span className="opacity-70">{t("newPlan.noFiles")}</span>}
+        {files.map((f) => {
+          const token = String(f.version_id);
+          const on = ticked.includes(token);
+          return (
+            <label key={f.version_id} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={on}
+                disabled={disabled || (!on && full)}
+                onChange={(e) => onChange(e.target.checked ? [...ticked, token] : ticked.filter((x) => x !== token))}
+              />
+              <span>
+                {f.filename}
+                <span className="opacity-60">
+                  {" "}
+                  — {f.document_name} v{f.version_no}, {Math.max(1, Math.round(f.size_bytes / 1024))} KB
+                </span>
+              </span>
+            </label>
+          );
+        })}
+        <span className="text-xs opacity-60">{t("newPlan.filesHelp")}</span>
+      </div>,
+      true,
+    );
+  }
+
+  // 제출서류 entries: one row each (name, version, date). R-BAY wants entries once a file is attached.
+  if (field.kind === "docs") {
+    const rows = docEntries(value);
+    const set = (next: DocEntry[]) => onChange(next);
+    const attached = Array.isArray(values["attachments.main"]) ? (values["attachments.main"] as string[]) : [];
+    const missing = attached
+      .flatMap((tok) => files.filter((f) => String(f.version_id) === tok))
+      .map(entryFromFile)
+      .filter((e) => !rows.some((r) => r.name === e.name));
+    return row(
+      <div role="group" aria-labelledby={`${id}-label`} className="flex flex-col gap-2">
+        {rows.map((r, i) => (
+          <div key={i} className="flex flex-wrap gap-2">
+            {(["name", "version", "date"] as const).map((part) => (
+              <input
+                key={part}
+                className={`rounded border px-2 py-1 ${part === "name" ? "min-w-48 flex-1" : "w-36"}`}
+                type={part === "date" ? "date" : "text"}
+                aria-label={t(`newPlan.entry.${part}`, { n: i + 1 })}
+                placeholder={t(`newPlan.entry.${part}Hint`)}
+                value={r[part]}
+                disabled={disabled}
+                onChange={(e) => set(rows.map((x, j) => (j === i ? { ...x, [part]: e.target.value } : x)))}
+              />
+            ))}
+            <Button size="sm" variant="ghost" disabled={disabled} onClick={() => set(rows.filter((_, j) => j !== i))}>
+              {t("newPlan.entry.remove", { n: i + 1 })}
+            </Button>
+          </div>
+        ))}
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" disabled={disabled} onClick={() => set([...rows, { name: "", version: "", date: "" }])}>
+            {t("newPlan.entry.add")}
+          </Button>
+          {missing.length > 0 && (
+            <Button size="sm" variant="outline" disabled={disabled} onClick={() => set([...rows, ...missing])}>
+              {t("newPlan.entry.fromFiles", { count: missing.length })}
+            </Button>
+          )}
+        </div>
+        <span className="text-xs opacity-60">{t("newPlan.entry.help")}</span>
+      </div>,
+      true,
+    );
+  }
 
   if (field.kind === "radio")
     return row(

@@ -23,7 +23,7 @@ function field(over: Partial<PlanField> & { key: string }): PlanField {
   return {
     kind: "text", label: over.key, basis: "optional", required: false, options: [], option_labels: null, note: "",
     show_when: [],
-    types: null, multiple: false, max_length: null, numeric: false, dynamic_options: false, supported: true,
+    types: null, multiple: false, max_length: null, max_files: null, numeric: false, dynamic_options: false, supported: true,
     code_prefix_of: null, code_prefixes: null, dependent_options: null, option_needs: {}, exclusive_groups: [],
     ...over,
   };
@@ -50,12 +50,14 @@ const FIELDS: PlanField[] = [
     option_needs: { digital_device: "digital_product" },
     option_labels: { drug: "약물", digital_product: "디지털의료제품", digital_device: "디지털의료기기" },
   }),
-  field({ key: "classification.5", kind: "multi", options: ["non_human"], option_labels: { non_human: "인간 대상 아님" } }),
-  field({
+  field({ key: "classification.5", kind: "multi", options: ["non_human"], option_labels: { non_human: "인간 대상 아님" } }),  field({
     key: "research_cost.support_scope", kind: "multi", options: ["all", "part", "part_drug"],
     exclusive_groups: [["all"], ["part", "part_drug"]],
     option_labels: { all: "연구비 전액", part: "연구비 일부", part_drug: "연구비 일부(의약품)" },
   }),
+  // appended last: other tests pick fields by position
+  field({ key: "attachments.main", kind: "file", multiple: true, max_files: 2 }),
+  field({ key: "attachments.docs", kind: "docs" }),
 ];
 const FORM: PlanForm = {
   available: true,
@@ -114,6 +116,14 @@ describe("the form's own rules", () => {
     expect(dependentList(FIELDS[6], { "disease.group": "brain" })).toBeNull(); // not read: the code is typed
   });
 
+  it("saves 제출서류 rows trimmed and leaves out rows with no name", () => {
+    const values = { "attachments.docs": [{ name: " Protocol ", version: " 1 ", date: "" }, { name: "  ", version: "9", date: "" }] };
+    expect(valuesToSave(FORM, values, "other_research")).toEqual({
+      "attachments.docs": [{ name: "Protocol", version: "1", date: "" }],
+    });
+    expect(valuesToSave(FORM, { "attachments.docs": [{ name: " ", version: "", date: "" }] }, "other_research")).toEqual({});
+  });
+
   it("unwraps agent-written values and gives the code prefix of the chosen group", () => {
     expect(unwrapValues({ a: { value: "x", source: "agent" }, b: ["y"], c: "z" })).toEqual({ a: "x", b: ["y"], c: "z" });
     expect(codePrefix(FIELDS[6], { "disease.group": "cancer" })).toBe("DCLA");
@@ -126,6 +136,7 @@ const api = vi.hoisted(() => ({
   runs: [] as PlanRun[],
   saved: [] as Array<{ project_key: string; affiliation: string; values: Record<string, unknown> }>,
   problems: [] as string[],
+  files: [] as Array<{ version_id: number; document_id: number; document_name: string; version_no: number; filename: string; size_bytes: number; created_at: string }>,
   started: 0,
   released: 0,
   formCalls: 0,
@@ -149,6 +160,7 @@ vi.mock("@/lib/api/new-plan", async () => {
         return api.runs[0];
       },
       runs: async () => api.runs,
+      files: async () => api.files,
       release: async () => {
         api.released += 1;
         api.runs = api.runs.map((r) => ({ ...r, draft_may_exist: false }));
@@ -186,6 +198,7 @@ beforeEach(() => {
   api.runs = [];
   api.saved = [];
   api.problems = [];
+  api.files = [];
   api.started = 0;
   api.released = 0;
   api.formCalls = 0;
@@ -262,6 +275,55 @@ describe("the new-plan panel", () => {
       project_key: "other_research", affiliation: "미라",
       values: { "study.title_ko": "제목", "mfds.approval": "not_needed" },
     });
+  });
+
+  const stepFile = (id: number, filename: string, version_no = 1) => ({
+    version_id: id, document_id: id, document_name: "Protocol", version_no, filename, size_bytes: 2048,
+    created_at: "2026-11-23T00:00:00Z",
+  });
+
+  it("picks the step's own files by version id, adds 제출서류 rows from their names and saves both", async () => {
+    api.files = [stepFile(101, "protocol v2.pdf"), stepFile(102, "ICF.docx"), stepFile(103, "extra.pdf")];
+    show();
+    await openPanel();
+    fireEvent.click(await screen.findByLabelText(/protocol v2.pdf/));
+    fireEvent.click(screen.getByLabelText(/ICF.docx/));
+    expect((screen.getByLabelText(/extra.pdf/) as HTMLInputElement).disabled).toBe(true); // the form takes 2
+    fireEvent.click(screen.getByRole("button", { name: /Add a row for each attached file \(2\)/ }));
+    fireEvent.change(screen.getByLabelText("Document 1: version"), { target: { value: "2.0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add a document" })); // an empty row is not saved
+    fireEvent.change(screen.getByLabelText("Document 1: date"), { target: { value: "2026-11-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save values" }));
+    await waitFor(() => expect(api.saved).toHaveLength(1));
+    expect(api.saved[0].values).toEqual({
+      "attachments.main": ["101", "102"],
+      "attachments.docs": [
+        { name: "protocol v2", version: "2.0", date: "2026-11-01" },
+        { name: "ICF", version: "", date: "" },
+      ],
+    });
+  });
+
+  it("names the files and says an upload cannot be undone before the job starts", async () => {
+    api.files = [stepFile(101, "protocol.pdf")];
+    api.record = {
+      id: "r", version: 1, project_key: "other_research", affiliation: "A", source: "form", created_at: "2026-11-23T00:00:00Z",
+      values: { "attachments.main": ["101"] },
+    };
+    show();
+    await openPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Write the draft on R-BAY/ }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/cannot be taken back/);
+    expect(dialog.textContent).toMatch(/protocol\.pdf/);
+  });
+
+  it("says so when the step has no files, and an unsupported file field stays a note", async () => {
+    show();
+    await openPanel();
+    expect(await screen.findByText(/no files yet/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("필요")); // opens mfds.ind_file, which the job does not upload
+    expect(screen.getAllByText(/not written by this job yet/).length).toBeGreaterThan(0);
   });
 
   it("lists what is missing when checked and does not start the job", async () => {

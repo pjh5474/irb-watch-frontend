@@ -12,10 +12,14 @@ import {
   type PlanRecord,
   type PlanRun,
   type PlanValues,
+  blockedOptions,
+  cleanMulti,
   codePrefix,
+  dependentList,
   isOpenRun,
   isShown,
   newPlanApi,
+  pruneValues,
   unwrapValues,
   valuesToSave,
 } from "@/lib/api/new-plan";
@@ -188,7 +192,12 @@ function Editor({
                 className="rounded border px-2 py-1"
                 value={projectKey}
                 disabled={flight.busy}
-                onChange={(e) => edit(() => setProjectKey(e.target.value))}
+                onChange={(e) =>
+                  edit(() => {
+                    setProjectKey(e.target.value);
+                    setValues((old) => pruneValues(form, old, e.target.value)); // fields of the other type go
+                  })
+                }
               >
                 {Object.entries(form.types).map(([key, label]) => (
                   <option key={key} value={key}>
@@ -220,7 +229,9 @@ function Editor({
                     field={f}
                     values={values}
                     disabled={flight.busy}
-                    onChange={(value) => edit(() => setValues((old) => ({ ...old, [f.key]: value })))}
+                    onChange={(value) =>
+                      edit(() => setValues((old) => pruneValues(form, { ...old, [f.key]: value }, projectKey)))
+                    }
                   />
                 ))}
               </div>
@@ -420,18 +431,19 @@ function FieldInput({
       </fieldset>
     );
 
-  if (field.kind === "multi")
+  if (field.kind === "multi") {
+    const blocked = blockedOptions(field, list); // R-BAY's own rules: a child needs its parent, one group at a time
     return (
       <fieldset className="flex flex-col gap-1">
         <legend>{label}</legend>
         <div className="flex flex-wrap gap-3">
           {field.options.map((o) => (
-            <label key={o} className="flex items-center gap-1">
+            <label key={o} className={`flex items-center gap-1 ${blocked.has(o) ? "opacity-50" : ""}`}>
               <input
                 type="checkbox"
                 checked={list.includes(o)}
-                disabled={disabled}
-                onChange={(e) => onChange(e.target.checked ? [...list, o] : list.filter((x) => x !== o))}
+                disabled={disabled || blocked.has(o)}
+                onChange={(e) => onChange(cleanMulti(field, e.target.checked ? [...list, o] : list.filter((x) => x !== o)))}
               />
               {optionText(o)}
             </label>
@@ -439,6 +451,24 @@ function FieldInput({
         </div>
         {help}
       </fieldset>
+    );
+  }
+
+  // A select R-BAY loads after another field (the disease subgroup): its list in Korean where it was read.
+  const loaded = field.kind === "select" && field.dynamic_options ? dependentList(field, values) : null;
+  if (loaded)
+    return (
+      <label className="flex flex-col gap-1">
+        {label}
+        <select className="rounded border px-2 py-1" value={text} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+          <option value="" />
+          {Object.entries(loaded).map(([code, name]) => (
+            <option key={code} value={code}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </label>
     );
 
   if (field.kind === "select" && !field.dynamic_options)

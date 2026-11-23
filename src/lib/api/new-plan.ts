@@ -5,7 +5,7 @@ import { apiFetch } from "@/lib/api/client";
 // no change here. Only the pipeline owner may use it; others get a 404 "step not found".
 
 export type FieldKind = "text" | "textarea" | "date" | "select" | "radio" | "multi" | "file" | "lookup" | "docs";
-export type ShowRule = { key: string; is?: string; includes?: string; is_one_of?: string[] };
+export type ShowRule = { key: string; is?: string; includes?: string; is_one_of?: string[]; is_empty?: boolean };
 
 export type PlanField = {
   key: string;
@@ -25,6 +25,10 @@ export type PlanField = {
   supported: boolean; // false: a file or 제출서류 field, not written by the job yet
   code_prefix_of: string | null;
   code_prefixes: Record<string, string> | null; // parent option key -> the code prefix, e.g. cancer -> DCLA
+  // The lists R-BAY loads for a dependent select, where they were read: parent option key -> {code: text}.
+  dependent_options: Record<string, Record<string, string>> | null;
+  option_needs: Record<string, string>; // multi: child option -> the parent option that must be ticked
+  exclusive_groups: string[][]; // multi: ticking one group makes the options of the other groups unusable
 };
 
 export type PlanForm = {
@@ -111,16 +115,70 @@ export function isShown(field: PlanField, fields: PlanField[], values: PlanValue
     if (rule.is !== undefined && current !== rule.is) return false;
     if (rule.includes !== undefined && !(Array.isArray(current) && current.includes(rule.includes))) return false;
     if (rule.is_one_of !== undefined && !rule.is_one_of.includes(current as string)) return false;
+    if (rule.is_empty !== undefined && isPresent(current) === rule.is_empty) return false;
   }
   return true;
+}
+
+/** The options of a multi field that cannot be ticked now: a child whose parent is not ticked, and the
+ *  options of every group other than the one already in use (R-BAY disables them the same way). */
+export function blockedOptions(field: PlanField, ticked: string[]): Set<string> {
+  const blocked = new Set<string>();
+  for (const [child, parent] of Object.entries(field.option_needs)) if (!ticked.includes(parent)) blocked.add(child);
+  const inUse = field.exclusive_groups.filter((g) => g.some((o) => ticked.includes(o)));
+  if (inUse.length > 0)
+    for (const group of field.exclusive_groups) if (!inUse.includes(group)) group.forEach((o) => blocked.add(o));
+  return blocked;
+}
+
+/** A multi value as R-BAY would leave it: no child without its parent, one exclusive group only. */
+export function cleanMulti(field: PlanField, ticked: string[]): string[] {
+  let out = ticked.filter((o) => field.options.includes(o));
+  for (let pass = 0; pass < 2; pass++) out = out.filter((o) => !(o in field.option_needs) || out.includes(field.option_needs[o]));
+  const groups = field.exclusive_groups.filter((g) => g.some((o) => out.includes(o)));
+  if (groups.length > 1) out = out.filter((o) => groups[0].includes(o) || !field.exclusive_groups.some((g) => g.includes(o)));
+  return out;
+}
+
+/** The R-BAY list of a dependent select for the parent's current choice, or null when it was not read. */
+export function dependentList(field: PlanField, values: PlanValues): Record<string, string> | null {
+  if (!field.code_prefix_of || !field.dependent_options) return null;
+  const parent = values[field.code_prefix_of];
+  return typeof parent === "string" ? (field.dependent_options[parent] ?? null) : null;
+}
+
+/** The values with every answer of a hidden field removed (R-BAY clears them), and dependent answers that
+ *  no longer fit their parent. Run after each change so the screen and the saved record agree. */
+export function pruneValues(form: PlanForm, values: PlanValues, projectKey: string): PlanValues {
+  const out: PlanValues = { ...values };
+  for (const page of form.pages) {
+    for (const field of page.fields) {
+      if (!(field.key in out)) continue;
+      if (!isShown(field, page.fields, out, projectKey)) {
+        delete out[field.key];
+        continue;
+      }
+      const value = out[field.key];
+      if (field.kind === "multi" && Array.isArray(value)) out[field.key] = cleanMulti(field, value as string[]);
+      // A dependent select: the answer must belong to the chosen parent (its code prefix, and its list
+      // when that was read); a changed parent drops it.
+      const list = dependentList(field, out);
+      const prefix = codePrefix(field, out);
+      if (typeof value === "string" && value !== "") {
+        if ((list !== null && !(value in list)) || (prefix !== null && !value.startsWith(prefix))) delete out[field.key];
+      }
+    }
+  }
+  return out;
 }
 
 /**
  * The values to save: only what is shown now, filled in, and written by the job. The server refuses
  * a value set on a hidden field, so a choice that was changed back must not leave its answers behind.
  */
-export function valuesToSave(form: PlanForm, values: PlanValues, projectKey: string): PlanValues {
+export function valuesToSave(form: PlanForm, raw: PlanValues, projectKey: string): PlanValues {
   const out: PlanValues = {};
+  const values = pruneValues(form, raw, projectKey);
   for (const page of form.pages) {
     for (const field of page.fields) {
       if (!field.supported) continue;

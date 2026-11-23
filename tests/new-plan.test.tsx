@@ -9,8 +9,12 @@ import {
   type PlanField,
   type PlanForm,
   type PlanRun,
+  blockedOptions,
+  cleanMulti,
   codePrefix,
+  dependentList,
   isShown,
+  pruneValues,
   unwrapValues,
   valuesToSave,
 } from "../src/lib/api/new-plan";
@@ -20,7 +24,8 @@ function field(over: Partial<PlanField> & { key: string }): PlanField {
     kind: "text", label: over.key, basis: "optional", required: false, options: [], option_labels: null, note: "",
     show_when: [],
     types: null, multiple: false, max_length: null, numeric: false, dynamic_options: false, supported: true,
-    code_prefix_of: null, code_prefixes: null, ...over,
+    code_prefix_of: null, code_prefixes: null, dependent_options: null, option_needs: {}, exclusive_groups: [],
+    ...over,
   };
 }
 
@@ -37,6 +42,19 @@ const FIELDS: PlanField[] = [
   field({
     key: "disease.subgroup", kind: "select", dynamic_options: true, code_prefix_of: "disease.group",
     code_prefixes: { cancer: "DCLA", brain: "DCLB" },
+    dependent_options: { cancer: { DCLA02: "소화기관", DCLA07: "유방" } }, // only 암 was read
+  }),
+  field({
+    key: "classification.1", kind: "multi", options: ["drug", "digital_product", "digital_device"],
+    show_when: [{ key: "classification.5", is_empty: true }],
+    option_needs: { digital_device: "digital_product" },
+    option_labels: { drug: "약물", digital_product: "디지털의료제품", digital_device: "디지털의료기기" },
+  }),
+  field({ key: "classification.5", kind: "multi", options: ["non_human"], option_labels: { non_human: "인간 대상 아님" } }),
+  field({
+    key: "research_cost.support_scope", kind: "multi", options: ["all", "part", "part_drug"],
+    exclusive_groups: [["all"], ["part", "part_drug"]],
+    option_labels: { all: "연구비 전액", part: "연구비 일부", part_drug: "연구비 일부(의약품)" },
   }),
 ];
 const FORM: PlanForm = {
@@ -66,6 +84,30 @@ describe("the form's own rules", () => {
     expect(valuesToSave(FORM, values, "other_research")).toEqual({
       "study.title_ko": "제목", "mfds.approval": "not_needed",
     });
+  });
+
+  it("applies R-BAY's ticking rules: a child needs its parent, one exclusive group at a time", () => {
+    const [cls1, , scope] = [FIELDS[7], FIELDS[8], FIELDS[9]];
+    expect([...blockedOptions(cls1, [])]).toEqual(["digital_device"]);
+    expect([...blockedOptions(cls1, ["digital_product"])]).toEqual([]);
+    expect(cleanMulti(cls1, ["digital_device", "drug"])).toEqual(["drug"]); // no parent: the child goes
+    expect(cleanMulti(cls1, ["digital_product", "digital_device"])).toEqual(["digital_product", "digital_device"]);
+    expect([...blockedOptions(scope, ["all"])].sort()).toEqual(["part", "part_drug"]);
+    expect([...blockedOptions(scope, ["part"])]).toEqual(["all"]);
+    expect(cleanMulti(scope, ["all", "part"])).toEqual(["all"]);
+  });
+
+  it("clears 분류1 when 분류5 is ticked and keeps the dependent answers consistent", () => {
+    const v = { "classification.1": ["drug"], "classification.5": ["non_human"], "disease.group": "cancer", "disease.subgroup": "DCLA07" };
+    expect(pruneValues(FORM, v, "other_research")).toEqual({
+      "classification.5": ["non_human"], "disease.group": "cancer", "disease.subgroup": "DCLA07",
+    });
+    // the group changes: a subgroup of the old group does not survive
+    expect(pruneValues(FORM, { ...v, "classification.5": [], "disease.group": "brain" }, "other_research")).toEqual({
+      "classification.1": ["drug"], "classification.5": [], "disease.group": "brain",
+    });
+    expect(dependentList(FIELDS[6], { "disease.group": "cancer" })).toEqual({ DCLA02: "소화기관", DCLA07: "유방" });
+    expect(dependentList(FIELDS[6], { "disease.group": "brain" })).toBeNull(); // not read: the code is typed
   });
 
   it("unwraps agent-written values and gives the code prefix of the chosen group", () => {
@@ -153,6 +195,35 @@ describe("the new-plan panel", () => {
     expect(screen.getByLabelText("필요")).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Project type/), { target: { value: "drug" } });
     expect(screen.getByLabelText("1")).toBeTruthy(); // the phase field has no labels: its keys show
+  });
+
+  it("lets the user pick the disease subgroup by its Korean name and saves the R-BAY code", async () => {
+    show();
+    await openPanel();
+    fireEvent.change(screen.getByLabelText(/disease.group/), { target: { value: "cancer" } });
+    fireEvent.change(await screen.findByLabelText(/disease.subgroup/), { target: { value: "DCLA07" } });
+    expect(screen.getByRole("option", { name: "유방" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/disease.group/), { target: { value: "brain" } }); // not read: a typed code
+    expect((screen.getByLabelText(/disease.subgroup/) as HTMLInputElement).value).toBe(""); // the old answer went
+    expect(screen.getByText(/starts with DCLB/)).toBeTruthy();
+  });
+
+  it("disables a child box until its parent is ticked, and hides 분류1 when 분류5 is ticked", async () => {
+    show();
+    await openPanel();
+    const child = screen.getByLabelText("디지털의료기기") as HTMLInputElement;
+    expect(child.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText("디지털의료제품"));
+    expect(child.disabled).toBe(false);
+    fireEvent.click(child);
+    fireEvent.click(screen.getByLabelText("디지털의료제품")); // untick the parent: the child goes with it
+    expect(child.checked).toBe(false);
+    fireEvent.click(screen.getByLabelText("연구비 전액")); // the exclusive groups
+    expect((screen.getByLabelText("연구비 일부") as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText("연구비 전액"));
+    expect((screen.getByLabelText("연구비 일부") as HTMLInputElement).disabled).toBe(false);
+    fireEvent.click(screen.getByLabelText("인간 대상 아님"));
+    expect(screen.queryByLabelText("디지털의료제품")).toBeNull(); // 분류1 is gone
   });
 
   it("makes no call until it is opened", () => {

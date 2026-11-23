@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { type Message, Note, errorText } from "@/components/pipelines/shared";
 import { Button } from "@/components/ui/button";
 import {
@@ -221,19 +221,38 @@ function Editor({
 
           {form.pages.map((page, index) => {
             const shown = page.fields.filter((f) => isShown(f, page.fields, values, projectKey));
+            // R-BAY's headings in its order; a page without them is one block, as before
+            const listed = new Set((page.sections ?? []).flatMap((s) => s.keys));
+            const groups = [
+              // the section's own key order is the order on screen
+              ...(page.sections ?? []).map((s) => ({
+                title: s.title,
+                fields: s.keys.flatMap((k) => shown.filter((f) => f.key === k)),
+              })),
+              { title: "", fields: shown.filter((f) => !listed.has(f.key)) }, // never lose a field a heading list missed
+            ];
             const body = (
-              <div className="flex flex-col gap-3">
-                {shown.map((f) => (
-                  <FieldInput
-                    key={f.key}
-                    field={f}
-                    values={values}
-                    disabled={flight.busy}
-                    onChange={(value) =>
-                      edit(() => setValues((old) => pruneValues(form, { ...old, [f.key]: value }, projectKey)))
-                    }
-                  />
-                ))}
+              <div className="flex flex-col gap-4">
+                {groups
+                  .filter((g) => g.fields.length > 0)
+                  .map((g) => (
+                    <section key={g.title || "all"}>
+                      {g.title && <h3 className="border-b-2 px-1 pb-1 text-base font-semibold">{g.title}</h3>}
+                      <div className="rounded-b border-x border-b">
+                        {g.fields.map((f) => (
+                          <FieldInput
+                            key={f.key}
+                            field={f}
+                            values={values}
+                            disabled={flight.busy}
+                            onChange={(value) =>
+                              edit(() => setValues((old) => pruneValues(form, { ...old, [f.key]: value }, projectKey)))
+                            }
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ))}
               </div>
             );
             return index === 0 ? (
@@ -407,75 +426,77 @@ function FieldInput({
   // R-BAY's own option text where it is known (Part I); the option key otherwise.
   const optionText = (o: string) => field.option_labels?.[o] ?? o;
 
+  const id = `np-${field.key}`;
+  // R-BAY's look: the label in a shaded cell on the left, the answer beside it (stacked on a narrow screen).
+  const row = (children: ReactNode, grouped = false) => (
+    <div className="grid gap-1 border-b px-3 py-2 last:border-b-0 md:grid-cols-[13rem_1fr] md:items-start md:gap-3">
+      {grouped ? (
+        <span id={`${id}-label`} className="rounded bg-black/5 px-2 py-1 font-medium dark:bg-white/10">
+          {label}
+        </span>
+      ) : (
+        <label htmlFor={id} className="rounded bg-black/5 px-2 py-1 font-medium dark:bg-white/10">
+          {label}
+        </label>
+      )}
+      <div className="flex flex-col gap-1">{children}</div>
+    </div>
+  );
+
   if (!field.supported)
-    return (
-      <div className="flex flex-col gap-1 opacity-60">
-        <span>{label}</span>
-        <span className="text-xs">{t("newPlan.fileUnsupported")}</span>
-      </div>
-    );
+    return row(<span className="text-xs opacity-60">{t("newPlan.fileUnsupported")}</span>, true);
 
   if (field.kind === "radio")
-    return (
-      <fieldset className="flex flex-col gap-1">
-        <legend>{label}</legend>
-        <div className="flex flex-wrap gap-3">
-          {field.options.map((o) => (
-            <label key={o} className="flex items-center gap-1">
-              <input type="radio" name={field.key} checked={text === o} disabled={disabled} onChange={() => onChange(o)} />
-              {optionText(o)}
-            </label>
-          ))}
-        </div>
-        {help}
-      </fieldset>
+    return row(
+      <div role="group" aria-labelledby={`${id}-label`} className="flex flex-wrap gap-3">
+        {field.options.map((o) => (
+          <label key={o} className="flex items-center gap-1">
+            <input type="radio" name={field.key} checked={text === o} disabled={disabled} onChange={() => onChange(o)} />
+            {optionText(o)}
+          </label>
+        ))}
+      </div>,
+      true,
     );
 
   if (field.kind === "multi") {
     const blocked = blockedOptions(field, list); // R-BAY's own rules: a child needs its parent, one group at a time
-    return (
-      <fieldset className="flex flex-col gap-1">
-        <legend>{label}</legend>
-        <div className="flex flex-wrap gap-3">
-          {field.options.map((o) => (
-            <label key={o} className={`flex items-center gap-1 ${blocked.has(o) ? "opacity-50" : ""}`}>
-              <input
-                type="checkbox"
-                checked={list.includes(o)}
-                disabled={disabled || blocked.has(o)}
-                onChange={(e) => onChange(cleanMulti(field, e.target.checked ? [...list, o] : list.filter((x) => x !== o)))}
-              />
-              {optionText(o)}
-            </label>
-          ))}
-        </div>
-        {help}
-      </fieldset>
+    return row(
+      <div role="group" aria-labelledby={`${id}-label`} className="flex flex-wrap gap-3">
+        {field.options.map((o) => (
+          <label key={o} className={`flex items-center gap-1 ${blocked.has(o) ? "opacity-50" : ""}`}>
+            <input
+              type="checkbox"
+              checked={list.includes(o)}
+              disabled={disabled || blocked.has(o)}
+              onChange={(e) => onChange(cleanMulti(field, e.target.checked ? [...list, o] : list.filter((x) => x !== o)))}
+            />
+            {optionText(o)}
+          </label>
+        ))}
+      </div>,
+      true,
     );
   }
 
   // A select R-BAY loads after another field (the disease subgroup): its list in Korean where it was read.
   const loaded = field.kind === "select" && field.dynamic_options ? dependentList(field, values) : null;
   if (loaded)
-    return (
-      <label className="flex flex-col gap-1">
-        {label}
-        <select className="rounded border px-2 py-1" value={text} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
-          <option value="" />
-          {Object.entries(loaded).map(([code, name]) => (
-            <option key={code} value={code}>
-              {name}
-            </option>
-          ))}
-        </select>
-      </label>
+    return row(
+      <select id={id} className="rounded border px-2 py-1" value={text} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+        <option value="" />
+        {Object.entries(loaded).map(([code, name]) => (
+          <option key={code} value={code}>
+            {name}
+          </option>
+        ))}
+      </select>,
     );
 
   if (field.kind === "select" && !field.dynamic_options)
-    return (
-      <label className="flex flex-col gap-1">
-        {label}
-        <select className="rounded border px-2 py-1" value={text} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+    return row(
+      <>
+        <select id={id} className="rounded border px-2 py-1" value={text} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
           <option value="" />
           {field.options.map((o) => (
             <option key={o} value={o}>
@@ -484,14 +505,14 @@ function FieldInput({
           ))}
         </select>
         {help}
-      </label>
+      </>,
     );
 
   if (field.kind === "textarea")
-    return (
-      <label className="flex flex-col gap-1">
-        {label}
+    return row(
+      <>
         <textarea
+          id={id}
           className="min-h-20 rounded border px-2 py-1"
           value={text}
           maxLength={field.max_length ?? undefined}
@@ -499,15 +520,15 @@ function FieldInput({
           onChange={(e) => onChange(e.target.value)}
         />
         {help}
-      </label>
+      </>,
     );
 
   // text, lookup, date, and a select whose list R-BAY loads (typed as its code)
   const prefix = field.kind === "select" ? codePrefix(field, values) : null;
-  return (
-    <label className="flex flex-col gap-1">
-      {label}
+  return row(
+    <>
       <input
+        id={id}
         className="rounded border px-2 py-1"
         type={field.kind === "date" ? "date" : "text"}
         inputMode={field.numeric ? "numeric" : undefined}
@@ -521,6 +542,6 @@ function FieldInput({
         <span className="text-xs opacity-60">{t("newPlan.codeHelp", { prefix: prefix ?? "—" })}</span>
       )}
       {help}
-    </label>
+    </>,
   );
 }

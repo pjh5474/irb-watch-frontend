@@ -61,7 +61,11 @@ const FORM: PlanForm = {
   available: true,
   types: { drug: "Drug", other_research: "Other research" },
   pages: [
-    { form: "new_review_part1", fields: FIELDS },
+    {
+      form: "new_review_part1", fields: FIELDS,
+      // two headings only: the other fields must still show (a heading list can miss one)
+      sections: [{ title: "연구 과제명", keys: ["study.title_ko"] }, { title: "IND 관련", keys: ["mfds.approval", "mfds.ind_no"] }],
+    },
     { form: "new_review_part2", fields: [field({ key: "p2.note", label: "비고" })] },
   ],
 };
@@ -195,6 +199,16 @@ describe("the new-plan panel", () => {
     expect(screen.getByLabelText("필요")).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Project type/), { target: { value: "drug" } });
     expect(screen.getByLabelText("1")).toBeTruthy(); // the phase field has no labels: its keys show
+  });
+
+  it("groups Part I under R-BAY's headings and still shows a field no heading lists", async () => {
+    show();
+    await openPanel();
+    const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(headings.slice(0, 2)).toEqual(["연구 과제명", "IND 관련"]); // a heading with no shown field is not drawn
+    expect(headings).not.toContain("색인");
+    expect(screen.getByLabelText(/disease.group/)).toBeTruthy(); // in no section: shown after the headings
+    expect(screen.getByRole("group", { name: /mfds.approval/ })).toBeTruthy(); // a radio row is one named group
   });
 
   it("lets the user pick the disease subgroup by its Korean name and saves the R-BAY code", async () => {

@@ -34,7 +34,8 @@ export type PlanField = {
 export type PlanForm = {
   available: boolean; // false: the hospital's R-BAY form has not been mapped
   types: Record<string, string>; // project type key -> R-BAY label
-  pages: Array<{ form: string; fields: PlanField[] }>;
+  // `sections`: R-BAY's headings in order with the field keys under each (absent or empty: no headings)
+  pages: Array<{ form: string; fields: PlanField[]; sections?: Array<{ title: string; keys: string[] }> }>;
 };
 
 export type PlanValues = Record<string, unknown>;

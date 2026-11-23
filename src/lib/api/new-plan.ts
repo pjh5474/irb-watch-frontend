@@ -13,7 +13,8 @@ export type PlanField = {
   label: string; // R-BAY's own label (Korean)
   basis: "star" | "assumed" | "optional";
   required: boolean; // only while the field is shown
-  options: string[]; // option keys; the model stores no option labels
+  options: string[]; // option keys
+  option_labels: Record<string, string> | null; // R-BAY's own option texts (Part I); null: show the keys
   note: string;
   show_when: ShowRule[];
   types: string[] | null; // project types the field exists in; null = all

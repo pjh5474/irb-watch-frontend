@@ -149,8 +149,11 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
         <FollowUps key={`follow-${step.id}`} pipelineId={id} page={d} readOnly={readOnly} />
       )}
       {!d.parent && !readOnly && <StepCopy key={`copy-${step.id}`} pipelineId={id} stepId={step.id} />}
-      {/* The R-BAY 신규계획 draft job: the pipeline owner only (the server refuses everyone else). */}
-      {!d.parent && !readOnly && d.access === "owner" && <StepNewPlan key={`new-plan-${step.id}`} stepId={step.id} />}
+      {/* The R-BAY 신규계획 draft job: only on an initial-review step (owner, 2026-11-23), and for the
+          pipeline owner only (the server refuses everyone else). An older server sends no category. */}
+      {!d.parent && !readOnly && d.access === "owner" && d.step_type_category === "initial" && (
+        <StepNewPlan key={`new-plan-${step.id}`} stepId={step.id} />
+      )}
       {docgenEnabled() && (
         <StepDrafts
           key={`drafts-${step.id}`}

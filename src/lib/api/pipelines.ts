@@ -175,6 +175,7 @@ export type StepPage = {
   target_warning?: "cancelled" | "rejected" | "removed" | "unavailable" | null;
   session_kinds?: SessionKind[];
   copied_from?: StepOrigin | null; // phase C2
+  step_type_category?: string | null; // "initial" shows the R-BAY new-plan panel; null: a free step
 };
 
 /** One site's column on the hospital page: its live main steps. */

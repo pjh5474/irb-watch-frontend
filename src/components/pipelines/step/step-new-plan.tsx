@@ -393,6 +393,8 @@ function FieldInput({
   );
   // The model's notes are developer notes (R-BAY element names, how a field was measured): not shown.
   const help = null;
+  // R-BAY's own option text where it is known (Part I); the option key otherwise.
+  const optionText = (o: string) => field.option_labels?.[o] ?? o;
 
   if (!field.supported)
     return (
@@ -410,7 +412,7 @@ function FieldInput({
           {field.options.map((o) => (
             <label key={o} className="flex items-center gap-1">
               <input type="radio" name={field.key} checked={text === o} disabled={disabled} onChange={() => onChange(o)} />
-              {o}
+              {optionText(o)}
             </label>
           ))}
         </div>
@@ -431,7 +433,7 @@ function FieldInput({
                 disabled={disabled}
                 onChange={(e) => onChange(e.target.checked ? [...list, o] : list.filter((x) => x !== o))}
               />
-              {o}
+              {optionText(o)}
             </label>
           ))}
         </div>
@@ -447,7 +449,7 @@ function FieldInput({
           <option value="" />
           {field.options.map((o) => (
             <option key={o} value={o}>
-              {o}
+              {optionText(o)}
             </option>
           ))}
         </select>

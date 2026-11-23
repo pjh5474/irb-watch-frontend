@@ -350,6 +350,27 @@ describe("copy a step to other PIs (phase C2)", () => {
     expect(screen.queryByRole("button", { name: "Copy to other PIs…" })).toBeNull();
   });
 
+  it("offers the R-BAY new-plan panel only on an initial-review step the user owns", async () => {
+    const button = { name: "Write the R-BAY new-plan draft…" };
+    wrap(<StepPageView id={9} stepId={21} />);
+    await screen.findByRole("button", { name: "Copy to other PIs…" });
+    expect(screen.queryByRole("button", button)).toBeNull(); // no category: not offered
+    cleanup();
+    state.page = { step_type_category: "amendment" };
+    wrap(<StepPageView id={9} stepId={21} />);
+    await screen.findByRole("button", { name: "Copy to other PIs…" });
+    expect(screen.queryByRole("button", button)).toBeNull();
+    cleanup();
+    state.page = { step_type_category: "initial" };
+    wrap(<StepPageView id={9} stepId={21} />);
+    expect(await screen.findByRole("button", button)).toBeTruthy();
+    cleanup();
+    state.page = { step_type_category: "initial", access: "edit" }; // a member: the server refuses them
+    wrap(<StepPageView id={9} stepId={21} />);
+    await screen.findByRole("button", { name: "Copy to other PIs…" });
+    expect(screen.queryByRole("button", button)).toBeNull();
+  });
+
   it("links a copied step to the step it came from", async () => {
     state.page = { copied_from: { pipeline_id: 8, step_id: 5, step_label: "Initial review", site_label: "01 · PI Kim", removed: true } };
     wrap(<StepPageView id={9} stepId={21} />);

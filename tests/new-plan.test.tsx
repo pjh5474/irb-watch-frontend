@@ -17,7 +17,8 @@ import {
 
 function field(over: Partial<PlanField> & { key: string }): PlanField {
   return {
-    kind: "text", label: over.key, basis: "optional", required: false, options: [], note: "", show_when: [],
+    kind: "text", label: over.key, basis: "optional", required: false, options: [], option_labels: null, note: "",
+    show_when: [],
     types: null, multiple: false, max_length: null, numeric: false, dynamic_options: false, supported: true,
     code_prefix_of: null, code_prefixes: null, ...over,
   };
@@ -25,7 +26,10 @@ function field(over: Partial<PlanField> & { key: string }): PlanField {
 
 const FIELDS: PlanField[] = [
   field({ key: "study.title_ko", kind: "textarea", label: "과제명", required: true }),
-  field({ key: "mfds.approval", kind: "radio", options: ["needed", "not_needed"], required: true }),
+  field({
+    key: "mfds.approval", kind: "radio", options: ["needed", "not_needed"], required: true,
+    option_labels: { needed: "필요", not_needed: "불필요" },
+  }),
   field({ key: "mfds.ind_no", required: true, show_when: [{ key: "mfds.approval", is: "needed" }] }),
   field({ key: "mfds.ind_file", kind: "file", supported: false, show_when: [{ key: "mfds.approval", is: "needed" }] }),
   field({ key: "phase", kind: "multi", options: ["1", "2"], types: ["drug"] }),
@@ -143,6 +147,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("the new-plan panel", () => {
+  it("shows R-BAY's option text where it is known and the option key where it is not", async () => {
+    show();
+    await openPanel();
+    expect(screen.getByLabelText("필요")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Project type/), { target: { value: "drug" } });
+    expect(screen.getByLabelText("1")).toBeTruthy(); // the phase field has no labels: its keys show
+  });
+
   it("makes no call until it is opened", () => {
     show();
     expect(api.formCalls).toBe(0);
@@ -153,10 +165,10 @@ describe("the new-plan panel", () => {
     show();
     await openPanel();
     expect(screen.queryByLabelText(/mfds.ind_no/)).toBeNull();
-    fireEvent.click(screen.getByLabelText("needed"));
+    fireEvent.click(screen.getByLabelText("필요")); // R-BAY's own text; the stored value is the key
     expect(screen.getByLabelText(/mfds.ind_no/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/mfds.ind_no/), { target: { value: "IND-1" } });
-    fireEvent.click(screen.getByLabelText("not_needed")); // changed back: the IND number must not be sent
+    fireEvent.click(screen.getByLabelText("불필요")); // changed back: the IND number must not be sent
     fireEvent.change(screen.getByLabelText(/과제명/), { target: { value: "제목" } });
     fireEvent.change(screen.getByLabelText(/Affiliation/), { target: { value: "미라" } });
     fireEvent.click(screen.getByRole("button", { name: "Save values" }));

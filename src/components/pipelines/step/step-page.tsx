@@ -7,6 +7,7 @@ import { History, Note, errorText, stepKey, useChange } from "@/components/pipel
 import { StepCopy } from "@/components/pipelines/step/step-copy";
 import { StepDocuments, missingRequired } from "@/components/pipelines/step/step-documents";
 import { StepHeader } from "@/components/pipelines/step/step-header";
+import { StepNewPlan } from "@/components/pipelines/step/step-new-plan";
 import { StepSession } from "@/components/pipelines/step/step-session";
 import { StepDrafts } from "@/components/pipelines/step-drafts";
 import { Button } from "@/components/ui/button";
@@ -148,6 +149,8 @@ export function StepPageView({ id, stepId }: { id: number; stepId: number }) {
         <FollowUps key={`follow-${step.id}`} pipelineId={id} page={d} readOnly={readOnly} />
       )}
       {!d.parent && !readOnly && <StepCopy key={`copy-${step.id}`} pipelineId={id} stepId={step.id} />}
+      {/* The R-BAY 신규계획 draft job: the pipeline owner only (the server refuses everyone else). */}
+      {!d.parent && !readOnly && d.access === "owner" && <StepNewPlan key={`new-plan-${step.id}`} stepId={step.id} />}
       {docgenEnabled() && (
         <StepDrafts
           key={`drafts-${step.id}`}

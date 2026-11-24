@@ -12,6 +12,7 @@ import {
   type PlanFile,
   type PlanForm,
   type PlanRecord,
+  type PlanRow,
   type PlanRun,
   type PlanValues,
   blockedOptions,
@@ -23,6 +24,7 @@ import {
   isOpenRun,
   isShown,
   newPlanApi,
+  planRows,
   pruneValues,
   unwrapValues,
   valuesToSave,
@@ -512,6 +514,66 @@ function FieldInput({
           );
         })}
         <span className="text-xs opacity-60">{t("newPlan.filesHelp")}</span>
+      </div>,
+      true,
+    );
+  }
+
+  // The 의약품 / 의료기기 list: one row each, the boxes of R-BAY's pop-up. Rows are written to R-BAY's draft
+  // when the run reaches this part (never edited there by the job), so the step then stays locked.
+  if (field.kind === "rows" && field.rows) {
+    const spec = field.rows;
+    const rows = planRows(value);
+    const set = (next: PlanRow[]) => onChange(next);
+    const drugOnDrugStudy = field.key === "p2.drug.rows" && projectKey === "drug";
+    return row(
+      <div role="group" aria-labelledby={`${id}-label`} className="flex flex-col gap-2">
+        {rows.map((r, i) => (
+          <div key={i} className="flex flex-col gap-1 rounded border p-2">
+            {spec.fields.map((box) =>
+              box.kind === "radio" ? (
+                <div key={box.key} role="group" aria-label={t("newPlan.rows.box", { n: i + 1, label: box.label })} className="flex flex-wrap items-center gap-3">
+                  <span className="w-36 opacity-70">{box.label}</span>
+                  {box.options.map((o) => (
+                    <label key={o} className="flex items-center gap-1">
+                      <input
+                        type="radio"
+                        name={`${field.key}-${i}-${box.key}`}
+                        checked={r[box.key] === o}
+                        disabled={disabled}
+                        onChange={() => set(rows.map((x, j) => (j === i ? { ...x, [box.key]: o } : x)))}
+                      />
+                      {box.option_labels?.[o] ?? o}
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <input
+                  key={box.key}
+                  className="rounded border px-2 py-1"
+                  aria-label={t("newPlan.rows.box", { n: i + 1, label: box.label })}
+                  placeholder={box.label}
+                  value={r[box.key] ?? ""}
+                  maxLength={200}
+                  disabled={disabled}
+                  onChange={(e) => set(rows.map((x, j) => (j === i ? { ...x, [box.key]: e.target.value } : x)))}
+                />
+              ),
+            )}
+            <div>
+              <Button size="sm" variant="ghost" disabled={disabled} onClick={() => set(rows.filter((_, j) => j !== i))}>
+                {t("newPlan.rows.remove", { n: i + 1 })}
+              </Button>
+            </div>
+          </div>
+        ))}
+        <div>
+          <Button size="sm" variant="outline" disabled={disabled || rows.length >= spec.max_rows} onClick={() => set([...rows, {}])}>
+            {t("newPlan.rows.add")}
+          </Button>
+        </div>
+        {rows.length > 0 && !drugOnDrugStudy && <span className="text-xs opacity-60">{t("newPlan.rows.mismatch")}</span>}
+        <span className="text-xs opacity-60">{t("newPlan.rows.help", { max: spec.max_rows })}</span>
       </div>,
       true,
     );

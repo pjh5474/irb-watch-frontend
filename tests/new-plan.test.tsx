@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "../messages/en.json";
@@ -68,7 +68,23 @@ const FORM: PlanForm = {
       // two headings only: the other fields must still show (a heading list can miss one)
       sections: [{ title: "연구 과제명", keys: ["study.title_ko"] }, { title: "IND 관련", keys: ["mfds.approval", "mfds.ind_no"] }],
     },
-    { form: "new_review_part2", fields: [field({ key: "p2.note", label: "비고" })] },
+    {
+      form: "new_review_part2",
+      fields: [
+        field({ key: "p2.note", label: "비고" }),
+        field({
+          key: "p2.drug.rows", kind: "rows", label: "의약품 목록",
+          rows: {
+            max_rows: 2,
+            fields: [
+              { key: "name", kind: "text", label: "의약품명", required: true, options: [], option_labels: null },
+              { key: "approved_use", kind: "radio", label: "허가 내 사용", required: false, options: ["yes", "no"], option_labels: { yes: "예", no: "아니오" } },
+              { key: "ind_no", kind: "text", label: "IND No.", required: false, options: [], option_labels: null },
+            ],
+          },
+        }),
+      ],
+    },
   ],
 };
 
@@ -122,6 +138,20 @@ describe("the form's own rules", () => {
       "attachments.docs": [{ name: "Protocol", version: "1", date: "" }],
     });
     expect(valuesToSave(FORM, { "attachments.docs": [{ name: " ", version: "", date: "" }] }, "other_research")).toEqual({});
+  });
+
+  it("saves the drug and device rows trimmed, without nameless rows, empty boxes or more than the cap", () => {
+    const values = {
+      "p2.drug.rows": [
+        { name: " A ", approved_use: "yes", ind_no: "  " },
+        { name: " ", approved_use: "no" },
+        { name: "B" }, { name: "C" },
+      ],
+    };
+    expect(valuesToSave(FORM, values, "other_research")).toEqual({
+      "p2.drug.rows": [{ name: "A", approved_use: "yes" }, { name: "B" }], // the cap of 2 rows
+    });
+    expect(valuesToSave(FORM, { "p2.drug.rows": [{ approved_use: "yes" }] }, "drug")).toEqual({});
   });
 
   it("unwraps agent-written values and gives the code prefix of the chosen group", () => {
@@ -302,6 +332,20 @@ describe("the new-plan panel", () => {
         { name: "ICF", version: "", date: "" },
       ],
     });
+  });
+
+  it("edits a drug row (boxes and a yes/no choice), caps the rows and saves them", async () => {
+    show();
+    await openPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Add a row" }));
+    fireEvent.change(screen.getByLabelText("Row 1: 의약품명"), { target: { value: " [TEST] drug " } });
+    fireEvent.click(within(screen.getByRole("group", { name: "Row 1: 허가 내 사용" })).getByLabelText("아니오"));
+    expect(screen.getByText(/check it fits this study/)).toBeTruthy(); // a drug row on a non-drug study: a gentle note
+    fireEvent.click(screen.getByRole("button", { name: "Add a row" }));
+    expect((screen.getByRole("button", { name: "Add a row" }) as HTMLButtonElement).disabled).toBe(true); // the cap is 2
+    fireEvent.click(screen.getByRole("button", { name: "Save values" }));
+    await waitFor(() => expect(api.saved).toHaveLength(1));
+    expect(api.saved[0].values["p2.drug.rows"]).toEqual([{ name: "[TEST] drug", approved_use: "no" }]); // the empty row is left out
   });
 
   it("names the files and says an upload cannot be undone before the job starts", async () => {

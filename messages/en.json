@@ -611,6 +611,13 @@
         "fromFiles": "Add a row for each attached file ({count})",
         "help": "R-BAY wants these entries once a file is attached. The name is a name from the hospital's list or your own text."
       },
+      "rows": {
+        "add": "Add a row",
+        "remove": "Remove row {n}",
+        "box": "Row {n}: {label}",
+        "help": "Each row is registered on R-BAY's draft the moment the run reaches this part (the step then stays locked, like a file). At most {max} rows. The evidence file of a row is added on R-BAY.",
+        "mismatch": "R-BAY shows this list for every study type; check it fits this study."
+      },
       "save": "Save values",
       "saved": "Values saved.",
       "unsaved": "Unsaved changes",

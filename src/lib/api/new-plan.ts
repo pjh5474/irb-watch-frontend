@@ -4,8 +4,26 @@ import { apiFetch } from "@/lib/api/client";
 // comes from the server as data (types, fields, show-when rules), so a hospital's form change needs
 // no change here. Only the pipeline owner may use it; others get a 404 "step not found".
 
-export type FieldKind = "text" | "textarea" | "date" | "select" | "radio" | "multi" | "file" | "lookup" | "docs";
-export type ShowRule = { key: string; is?: string; includes?: string; is_one_of?: string[]; is_empty?: boolean };
+export type FieldKind = "text" | "textarea" | "date" | "select" | "radio" | "multi" | "file" | "lookup" | "docs" | "rows";
+
+/** One box of a row (the 의약품 / 의료기기 pop-ups): text or a radio group. */
+export type RowBox = {
+  key: string;
+  kind: "text" | "radio";
+  label: string;
+  required: boolean;
+  options: string[];
+  option_labels: Record<string, string> | null;
+};
+export type PlanRow = Record<string, string>;
+export type ShowRule = {
+  key: string;
+  is?: string;
+  includes?: string;
+  excludes?: string; // shown unless this box is ticked (PHASE PMS disables 연구 목적)
+  is_one_of?: string[];
+  is_empty?: boolean;
+};
 
 export type PlanField = {
   key: string;
@@ -31,7 +49,18 @@ export type PlanField = {
   dependent_options: Record<string, Record<string, string>> | null;
   option_needs: Record<string, string>; // multi: child option -> the parent option that must be ticked
   exclusive_groups: string[][]; // multi: ticking one group makes the options of the other groups unusable
+  rows?: { max_rows: number; fields: RowBox[] } | null; // kind "rows": the boxes of one row
 };
+
+/** A rows value as the editor holds it: a list of rows, each box as text. */
+export function planRows(value: unknown): PlanRow[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => {
+    const row: PlanRow = {};
+    for (const [k, x] of Object.entries((v ?? {}) as Record<string, unknown>)) row[k] = String(x ?? "");
+    return row;
+  });
+}
 
 export type PlanForm = {
   available: boolean; // false: the hospital's R-BAY form has not been mapped
@@ -145,6 +174,7 @@ export function isShown(field: PlanField, fields: PlanField[], values: PlanValue
     const current = typeof raw === "string" ? raw.trim() : raw;
     if (rule.is !== undefined && current !== rule.is) return false;
     if (rule.includes !== undefined && !(Array.isArray(current) && current.includes(rule.includes))) return false;
+    if (rule.excludes !== undefined && Array.isArray(current) && current.includes(rule.excludes)) return false;
     if (rule.is_one_of !== undefined && !rule.is_one_of.includes(current as string)) return false;
     if (rule.is_empty !== undefined && isPresent(current) === rule.is_empty) return false;
   }
@@ -220,6 +250,15 @@ export function valuesToSave(form: PlanForm, raw: PlanValues, projectKey: string
         const rows = docEntries(value)
           .map((e) => ({ name: e.name.trim(), version: e.version.trim(), date: e.date.trim() }))
           .filter((e) => e.name !== "");
+        if (rows.length > 0) out[field.key] = rows;
+        continue;
+      }
+      if (field.kind === "rows" && field.rows) {
+        // trimmed boxes only; a row with no name is an empty row and is left out; never more than the cap
+        const rows = planRows(value)
+          .map((r) => Object.fromEntries(field.rows!.fields.map((b) => [b.key, (r[b.key] ?? "").trim()]).filter(([, x]) => x !== "")))
+          .filter((r) => (r.name ?? "") !== "")
+          .slice(0, field.rows.max_rows);
         if (rows.length > 0) out[field.key] = rows;
         continue;
       }

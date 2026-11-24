@@ -258,6 +258,7 @@ function Editor({
                           <FieldInput
                             key={f.key}
                             field={f}
+                            projectKey={projectKey}
                             values={values}
                             files={stepFiles}
                             filesState={filesQ.isError ? errorText(filesQ.error, t) : filesQ.isLoading ? "loading" : null}
@@ -426,9 +427,10 @@ function RunList({ runs }: { runs: PlanRun[] }) {
 }
 
 function FieldInput({
-  field, values, files, filesState, disabled, onChange,
+  field, projectKey, values, files, filesState, disabled, onChange,
 }: {
   field: PlanField;
+  projectKey: string; // the chosen project type
   values: PlanValues;
   files: PlanFile[]; // the step's own files (for a file field)
   filesState: string | null; // "loading", an error text, or null
@@ -442,7 +444,7 @@ function FieldInput({
   const label = (
     <>
       {field.label}
-      {field.required && (
+      {field.required && (!field.required_types || field.required_types.includes(projectKey)) && (
         <span className="text-red-600" aria-label={t("newPlan.required")}>
           {" "}
           *

@@ -482,7 +482,8 @@ function FieldInput({
   // The step's own files: tick the ones to attach. The value is the list of version ids (as text).
   if (field.kind === "file") {
     const ticked = list;
-    const full = field.max_files !== null && ticked.length >= field.max_files;
+    const cap = field.multiple ? field.max_files : 1; // a box that takes one file (the 불필요 사유 근거문서)
+    const full = cap !== null && ticked.length >= cap;
     return row(
       <div role="group" aria-labelledby={`${id}-label`} className="flex flex-col gap-1">
         {filesState === "loading" && <span className="opacity-70">{t("loading")}</span>}

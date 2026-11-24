@@ -334,6 +334,25 @@ describe("the new-plan panel", () => {
     });
   });
 
+  it("lets a single-file box take one file only and saves its version id", async () => {
+    api.files = [stepFile(101, "reason.pdf"), stepFile(102, "other.pdf")];
+    const extra = field({ key: "p2.reason_file", kind: "file", label: "근거문서", multiple: false });
+    const files = FORM.pages[1].fields;
+    files.push(extra); // only this test sees the box (the other tests find files by their names)
+    try {
+      show();
+      await openPanel();
+      const box = (await screen.findAllByRole("group", { name: /근거문서/ }))[0];
+      fireEvent.click(within(box).getByLabelText(/reason.pdf/));
+      expect((within(box).getByLabelText(/other.pdf/) as HTMLInputElement).disabled).toBe(true); // the box takes one
+      fireEvent.click(screen.getByRole("button", { name: "Save values" }));
+      await waitFor(() => expect(api.saved).toHaveLength(1));
+      expect(api.saved[0].values["p2.reason_file"]).toEqual(["101"]);
+    } finally {
+      files.splice(files.indexOf(extra), 1);
+    }
+  });
+
   it("edits a drug row (boxes and a yes/no choice), caps the rows and saves them", async () => {
     show();
     await openPanel();

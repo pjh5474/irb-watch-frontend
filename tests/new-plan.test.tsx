@@ -168,12 +168,17 @@ const api = vi.hoisted(() => ({
   problems: [] as string[],
   files: [] as Array<{ version_id: number; document_id: number; document_name: string; version_no: number; filename: string; size_bytes: number; created_at: string }>,
   started: 0,
+  startedWith: [] as string[], // the manifest hash each start carried
+  startRefusal: null as string | null, // a refusal the server gives to a start
+  checkWithoutManifest: false, // an older server: ready, but no plan in the answer
+  badManifest: false, // a plan this screen cannot read
   released: 0,
   formCalls: 0,
 }));
 
 vi.mock("@/lib/api/new-plan", async () => {
   const real = await vi.importActual<typeof import("../src/lib/api/new-plan")>("../src/lib/api/new-plan");
+  const { ApiError } = await vi.importActual<typeof import("../src/lib/api/client")>("../src/lib/api/client");
   return {
     ...real,
     newPlanApi: {
@@ -184,9 +189,34 @@ vi.mock("@/lib/api/new-plan", async () => {
         api.record = { id: "r", version: api.saved.length, source: "form", created_at: "2026-11-23T00:00:00Z", ...body };
         return api.record;
       },
-      check: async () => ({ ready: api.problems.length === 0, problems: api.problems }),
-      start: async () => {
+      // like the server: when nothing stops the run, the manifest of what it would do (never the values) and its hash
+      check: async () => {
+        if (api.problems.length > 0) return { ready: false, problems: api.problems, manifest: null, manifest_sha256: null };
+        if (api.checkWithoutManifest) return { ready: true, problems: [] };
+        if (api.badManifest) return { ready: true, problems: [], manifest: { scope: [] }, manifest_sha256: "a".repeat(64) };
+        const ids = (api.record?.values["attachments.main"] as string[] | undefined) ?? [];
+        return {
+          ready: true,
+          problems: [],
+          manifest: {
+            identity: {
+              step_id: 27, hospital_id: 1, agency: "HOSP", project_key: api.record?.project_key ?? "other_research",
+              affiliation: api.record?.affiliation ?? "", pi_name: "Dr Test",
+            },
+            record: { id: "r", version: api.record?.version ?? 1 },
+            files: api.files
+              .filter((f) => ids.includes(String(f.version_id)))
+              .map((f) => ({ field: "attachments.main", version_id: f.version_id, filename: f.filename, sha256: "0".repeat(64), size_bytes: f.size_bytes })),
+            scope: ["open_form", "create_draft", "fill_part1", "press_next", "fill_part2", "press_save"],
+            forbidden: ["submit_application"],
+          },
+          manifest_sha256: `${api.record?.version ?? 1}`.padStart(64, "a"),
+        };
+      },
+      start: async (_id: number, sha: string) => {
         api.started += 1;
+        api.startedWith.push(sha);
+        if (api.startRefusal) throw new ApiError(409, api.startRefusal); // like the server's 409 with its reason
         return api.runs[0];
       },
       runs: async () => api.runs,
@@ -228,6 +258,10 @@ beforeEach(() => {
   api.runs = [];
   api.saved = [];
   api.problems = [];
+  api.startedWith = [];
+  api.startRefusal = null;
+  api.checkWithoutManifest = false;
+  api.badManifest = false;
   api.files = [];
   api.started = 0;
   api.released = 0;
@@ -376,7 +410,7 @@ describe("the new-plan panel", () => {
     show();
     await openPanel();
     fireEvent.click(screen.getByRole("button", { name: /Write the draft on R-BAY/ }));
-    const dialog = screen.getByRole("alertdialog");
+    const dialog = await screen.findByRole("alertdialog"); // after the check: the dialog shows the server's plan
     expect(dialog.textContent).toMatch(/cannot be taken back/);
     expect(dialog.textContent).toMatch(/protocol\.pdf/);
   });
@@ -396,19 +430,60 @@ describe("the new-plan panel", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Check/ }));
     expect(await screen.findByText("pi.name: a value is needed")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Write the draft on R-BAY/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Start the job" }));
     await screen.findByText("pi.name: a value is needed");
+    expect(screen.queryByRole("alertdialog")).toBeNull(); // no plan to approve: the reasons are shown instead
     expect(api.started).toBe(0); // the server's reasons stop it before any run
   });
 
-  it("asks before it starts, and starts once the values are complete", async () => {
+  it("shows the server's plan, asks before it starts, and sends the hash of exactly that plan", async () => {
     show();
     await openPanel();
     fireEvent.click(screen.getByRole("button", { name: /Write the draft on R-BAY/ }));
-    expect(screen.getByRole("alertdialog").textContent).toMatch(/real DRAFT/);
-    expect(api.started).toBe(0);
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/real DRAFT/);
+    expect(dialog.textContent).toMatch(/PI Dr Test/); // identity and scope come from the manifest
+    expect(dialog.textContent).toMatch(/Create a draft application on R-BAY/);
+    expect(dialog.textContent).toMatch(/Never done: submitting the application/);
+    expect(api.started).toBe(0); // the check sent nothing
     fireEvent.click(screen.getByRole("button", { name: "Start the job" }));
     await waitFor(() => expect(api.started).toBe(1));
+    expect(api.startedWith).toEqual(["a".repeat(63) + "1"]); // the hash of the version-1 plan that was shown
+  });
+
+  it("a refused start shows the reason and needs a new check before another start", async () => {
+    api.startRefusal = "what you approved is not what would be written now: check the plan again";
+    show();
+    await openPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Write the draft on R-BAY/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start the job" }));
+    expect(await screen.findByText(/not what would be written now/)).toBeTruthy();
+    expect(screen.queryByRole("alertdialog")).toBeNull(); // the approval was spent: no stale plan stays on screen
+  });
+
+  it("fails closed when the server answers ready without a valid plan: no dialog, no start, a clear message", async () => {
+    api.checkWithoutManifest = true; // an older server: "ready" and nothing to approve
+    show();
+    await openPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Write the draft on R-BAY/ }));
+    expect(await screen.findByText(/did not return the plan to approve/)).toBeTruthy();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(api.started).toBe(0); // and no legacy start without a hash
+    expect(api.startedWith).toEqual([]);
+    api.checkWithoutManifest = false;
+    api.badManifest = true; // a manifest that is not what this screen understands
+    fireEvent.click(screen.getByRole("button", { name: /Write the draft on R-BAY/ }));
+    expect(await screen.findByText(/did not return the plan to approve/)).toBeTruthy();
+    expect(api.started).toBe(0);
+  });
+
+  it("an edit after the plan was shown withdraws it", async () => {
+    show();
+    await openPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Write the draft on R-BAY/ }));
+    await screen.findByRole("alertdialog");
+    fireEvent.change(screen.getByLabelText(/과제명/), { target: { value: "다른 제목" } });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(api.started).toBe(0);
   });
 
   it("holds the step after a draft: no start button, and release needs a confirm", async () => {

@@ -11,6 +11,7 @@ import {
   type PlanField,
   type PlanFile,
   type PlanForm,
+  type PlanManifest,
   type PlanRecord,
   type PlanRow,
   type PlanRun,
@@ -24,6 +25,7 @@ import {
   isOpenRun,
   isShown,
   newPlanApi,
+  isValidManifest,
   planRows,
   pruneValues,
   unwrapValues,
@@ -124,10 +126,10 @@ function Editor({
   const [message, setMessage] = useState<Message>(null);
   const [problems, setProblems] = useState<string[] | null>(null);
   const [confirming, setConfirming] = useState<"start" | "release" | null>(null);
+  // The plan the user is asked to approve: what the server's check returned (its manifest and hash). The start
+  // sends this hash back, so the approval is of exactly what the dialog shows.
+  const [plan, setPlan] = useState<{ manifest: PlanManifest; sha: string } | null>(null);
 
-  // The files the next run would send to R-BAY (named in the start confirm: an upload cannot be undone there)
-  const picked = Array.isArray(values["attachments.main"]) ? (values["attachments.main"] as string[]) : [];
-  const pickedFiles = picked.flatMap((id) => stepFiles.filter((f) => String(f.version_id) === id));
   const runs = runsQ.data ?? [];
   const open = runs.some(isOpenRun);
   const held = runs.some((r) => r.draft_may_exist);
@@ -137,6 +139,7 @@ function Editor({
     setDirty(true);
     setProblems(null);
     setConfirming(null);
+    setPlan(null); // an edit makes any shown plan stale
   }
 
   async function act(work: () => Promise<string | null>) {
@@ -167,14 +170,35 @@ function Editor({
       return answer.ready ? t("newPlan.checkOk") : null;
     });
 
-  const start = (form: PlanForm) =>
+  // Start button: save, check, and show the server's plan for approval (nothing is sent to R-BAY yet).
+  const openStart = (form: PlanForm) =>
     act(async () => {
-      setConfirming(null);
+      setPlan(null);
       if (dirty) await saveNow(form);
       const answer = await newPlanApi.check(stepId);
       setProblems(answer.problems);
-      if (!answer.ready) return null; // nothing is sent to R-BAY; the reasons are listed
-      await newPlanApi.start(stepId);
+      if (!answer.ready) return null; // the reasons are listed
+      // Fail closed: a server that answers "ready" without a plan to approve is older than this screen. There is
+      // no fallback to a start without approval; nothing is sent to R-BAY.
+      if (!isValidManifest(answer.manifest) || !/^[0-9a-f]{64}$/.test(answer.manifest_sha256 ?? "")) {
+        setMessage({ kind: "error", text: t("newPlan.serverOutdated") });
+        return null;
+      }
+      setPlan({ manifest: answer.manifest, sha: answer.manifest_sha256 as string });
+      setConfirming("start");
+      return null;
+    });
+
+  // "Yes" in the confirm: the run the user approved, by the hash of the plan that was shown.
+  const start = () =>
+    act(async () => {
+      if (!plan) return null;
+      setConfirming(null);
+      try {
+        await newPlanApi.start(stepId, plan.sha);
+      } finally {
+        setPlan(null); // a plan is approved once: another start needs a new check
+      }
       await queryClient.invalidateQueries({ queryKey: ["new-plan", stepId] });
       return t("newPlan.started");
     });
@@ -301,7 +325,7 @@ function Editor({
             <Button
               size="sm"
               disabled={flight.busy || !runsQ.isSuccess || open || held || !form.available}
-              onClick={() => setConfirming("start")}
+              onClick={() => openStart(form)}
             >
               {t("newPlan.start")}
             </Button>
@@ -309,24 +333,32 @@ function Editor({
           </div>
           {held && !open && <p className="opacity-70">{t("newPlan.heldNote")}</p>}
 
-          {confirming === "start" && (
+          {confirming === "start" && plan && (
             <div role="alertdialog" aria-label={t("newPlan.startConfirmTitle")} className="flex flex-col gap-2 rounded border border-amber-400 p-3">
               <p>{t("newPlan.startConfirm")}</p>
-              {pickedFiles.length > 0 && (
+              <ul className="list-disc pl-5">
+                <li>{t("newPlan.plan.identity", { pi: plan.manifest.identity.pi_name ?? "—", affiliation: plan.manifest.identity.affiliation })}</li>
+                <li>{t("newPlan.plan.version", { n: plan.manifest.record.version })}</li>
+                {plan.manifest.scope.map((s) => (
+                  <li key={s}>{t(`newPlan.plan.scope.${s}`)}</li>
+                ))}
+              </ul>
+              {plan.manifest.files.length > 0 && (
                 <div>
                   <p className="font-medium text-red-700 dark:text-red-300">{t("newPlan.uploadWarning")}</p>
                   <ul className="list-disc pl-5">
-                    {pickedFiles.map((f) => (
-                      <li key={f.version_id}>{f.filename}</li>
+                    {plan.manifest.files.map((f) => (
+                      <li key={`${f.field}-${f.version_id}`}>{f.filename}</li>
                     ))}
                   </ul>
                 </div>
               )}
+              <p className="opacity-70">{t("newPlan.plan.never")}</p>
               <div className="flex gap-2">
-                <Button size="sm" disabled={flight.busy} onClick={() => start(form)}>
+                <Button size="sm" disabled={flight.busy} onClick={() => start()}>
                   {t("newPlan.startYes")}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+                <Button size="sm" variant="ghost" onClick={() => (setConfirming(null), setPlan(null))}>
                   {t("cancel")}
                 </Button>
               </div>

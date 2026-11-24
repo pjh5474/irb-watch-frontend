@@ -611,6 +611,22 @@
         "fromFiles": "Add a row for each attached file ({count})",
         "help": "R-BAY wants these entries once a file is attached. The name is a name from the hospital's list or your own text."
       },
+      "serverOutdated": "The server did not return the plan to approve (it is older than this screen). Nothing was sent to R-BAY. Reload the page; if it persists, the server needs the same release as the screen.",
+      "plan": {
+        "identity": "PI {pi}, affiliation {affiliation}",
+        "version": "Values version {n}",
+        "scope": {
+          "open_form": "Open R-BAY's new-plan form",
+          "create_draft": "Create a draft application on R-BAY (R-BAY may keep it even if the run stops)",
+          "fill_part1": "Fill Part I",
+          "upload_files": "Upload the files below (an upload cannot be undone from here)",
+          "press_next": "Press 다음>> (saves Part I)",
+          "fill_part2": "Fill Part II",
+          "register_rows": "Register the drug and device rows",
+          "press_save": "Press 저장 (saves Part II)"
+        },
+        "never": "Never done: submitting the application (의뢰), deleting anything, or changing an existing application."
+      },
       "rows": {
         "add": "Add a row",
         "remove": "Remove row {n}",

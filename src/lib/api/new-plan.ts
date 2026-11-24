@@ -108,7 +108,36 @@ export type PlanRecord = {
   created_at: string;
 };
 
+/** What the check shows and the start must carry back (by hash): built by the server from stored data. The values
+ *  themselves are not in it. */
+export type PlanManifest = {
+  identity: { step_id: number; hospital_id: number; agency: string; project_key: string; affiliation: string; pi_name: string | null };
+  record: { id: string; version: number };
+  files: Array<{ field: string; version_id: number; filename: string; sha256: string; size_bytes: number }>;
+  scope: string[]; // open_form, create_draft, fill_part1, upload_files, press_next, fill_part2, register_rows, press_save
+  forbidden: string[];
+};
+/** Does the server's answer carry a plan this screen can show and the start can bind to? (Fail closed: an older
+ *  server answers without one, and the start must not go ahead.) */
+export function isValidManifest(m: unknown): m is PlanManifest {
+  if (m === null || typeof m !== "object") return false;
+  const x = m as Partial<PlanManifest>;
+  return (
+    typeof x.identity === "object" && x.identity !== null &&
+    typeof x.record === "object" && x.record !== null && typeof x.record.version === "number" &&
+    Array.isArray(x.files) && Array.isArray(x.scope) && x.scope.length > 0 && Array.isArray(x.forbidden)
+  );
+}
+
+export type PlanCheck = {
+  ready: boolean;
+  problems: string[];
+  manifest: PlanManifest | null;
+  manifest_sha256: string | null;
+};
+
 export type PlanRunStatus = "queued" | "running" | "done" | "failed";
+export type ExternalState = "none" | "unknown" | "draft_created" | "partial" | "save_acked";
 export type PlanRun = {
   id: string;
   pipeline_step_id: number;
@@ -118,6 +147,8 @@ export type PlanRun = {
   error: string | null;
   draft_title: string | null;
   draft_may_exist: boolean;
+  external_state?: ExternalState; // what is KNOWN about R-BAY (save_acked is not yet a verification)
+  manifest_sha256?: string | null;
   report: { fields?: Array<{ key: string; status: string; detail: string }>; dialogs?: string[] };
   created_at: string;
   started_at: string | null;
@@ -134,8 +165,10 @@ export const newPlanApi = {
   values: (stepId: number) => apiFetch<PlanRecord | null>(`${base(stepId)}/values`),
   save: (stepId: number, body: { project_key: string; affiliation: string; values: PlanValues }) =>
     apiFetch<PlanRecord>(`${base(stepId)}/values`, { method: "PUT", body: JSON.stringify(body) }),
-  check: (stepId: number) => apiFetch<{ ready: boolean; problems: string[] }>(`${base(stepId)}/check`),
-  start: (stepId: number) => apiFetch<PlanRun>(`${base(stepId)}/runs`, { method: "POST" }),
+  check: (stepId: number) => apiFetch<PlanCheck>(`${base(stepId)}/check`),
+  // The user approves exactly the manifest the check showed: its hash goes back, or the server refuses.
+  start: (stepId: number, manifestSha256: string) =>
+    apiFetch<PlanRun>(`${base(stepId)}/runs`, { method: "POST", body: JSON.stringify({ manifest_sha256: manifestSha256 }) }),
   files: (stepId: number) => apiFetch<PlanFile[]>(`${base(stepId)}/files`),
   runs: (stepId: number, history = false) =>
     apiFetch<PlanRun[]>(`${base(stepId)}/runs${history ? "?history=true" : ""}`),
